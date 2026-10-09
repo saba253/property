@@ -44,9 +44,12 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
+## Current state
+
 - Last completed step: Step 1.2 — Development tooling (Prettier, Vitest, npm scripts, GitHub Actions workflow).
-- What works: Next.js app created. Locally passing: `npm run lint`, `npm run typecheck`, `npm test` (one smoke test), `npm run format:check`, `npm run build`. Also available: `npm run format`, `npm run test:watch`.
+- What works: Next.js app created. Passing locally and in GitHub Actions CI: `npm run lint`, `npm run typecheck`, `npm test` (one smoke test), `npm run build`. Also available: `npm run format`, `npm run format:check`, `npm run test:watch`.
 - Tooling files: `.prettierrc.json`, `.prettierignore`, `vitest.config.ts`, `tests/smoke.test.ts`, `.github/workflows/ci.yml`.
-- Known issues: The GitHub Actions workflow has not yet been confirmed running on GitHub. Tests are placeholders only; Vitest is configured for the Node environment (no component testing yet). Vitest does not yet know the `@/` import alias; add it when the first test needs it.
+- Notes: `typecheck` runs `next typegen` first, because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout.
+- Known issues: Tests are placeholders only. Vitest is configured for the Node environment (no component testing yet). Vitest does not yet know the `@/` import alias; add it when the first test needs it.
 - Environment variables: None configured yet.
 - Next step: Step 1.3 — to be planned.
