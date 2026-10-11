@@ -52,12 +52,12 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
-## Current state
-
-- Last completed step: Step 1.3 — Project structure and conventions.
+- Last completed step: Step 1.4 - First homepage UI (Georgian-first landing page).
 - What works: Passing locally: `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, `npm run build`. GitHub Actions CI runs lint, typecheck, tests, and build.
-- Business logic so far: `lib/pricing/price-per-sqm.ts` (`calculateAskingPricePerSqm`, a pure helper for asking price per square metre, currency-neutral), tested in `tests/lib/pricing/price-per-sqm.test.ts`.
-- Notes: `typecheck` runs `next typegen` first because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout. The Vitest `@/` alias is configured and matches `tsconfig.json`.
-- Known issues: Vitest runs in the Node environment only (no component testing yet). `tests/smoke.test.ts` is a placeholder and can be removed later. CI for the Step 1.3 commit has not yet been confirmed.
+- Homepage: `app/page.tsx` is a static landing page in Georgian with a temporary text logo, an "under development" banner, and three "coming soon" feature cards (search, asking-price comparison, calculators). It shows no listings, no statistics, and no language switcher. Text needs a native Georgian speaker review before launch.
+- Fonts and theme: `app/layout.tsx` uses Noto Sans Georgian (`next/font/google`) and `<html lang="ka">`. The theme is light only; dark mode was removed for now.
+- Business logic so far: `lib/pricing/price-per-sqm.ts` (`calculateAskingPricePerSqm`), tested in `tests/lib/pricing/price-per-sqm.test.ts`.
+- Notes: `typecheck` runs `next typegen` first because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout. The Vitest `@/` alias matches `tsconfig.json`.
+- Known issues: Vitest runs in the Node environment only (no component testing yet). `tests/smoke.test.ts` is a placeholder. `public/next.svg` and `public/vercel.svg` are unused starter files. The temporary logo name is not final. English localization is not implemented yet.
 - Environment variables: None configured yet.
-- Next step: Step 1.4 — to be planned.
+- Next step: Step 1.5 - to be planned.
