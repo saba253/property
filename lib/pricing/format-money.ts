@@ -22,6 +22,17 @@ export function formatPricePerSqm(pricePerSqm: number, currency: Currency): stri
   return `${CURRENCY_SYMBOLS[currency]}${formatNumber(pricePerSqm, 2, 2)} / მ²`;
 }
 
+/** Example: formatExchangeRate(2.6005) returns "1 USD = 2.6005 GEL" (NBG publishes 4 decimals). */
+export function formatExchangeRate(gelPerUsd: number): string {
+  return `1 USD = ${formatNumber(gelPerUsd, 4, 4)} GEL`;
+}
+
+/** Example: formatDateGeorgian("2026-10-10") returns "10.10.2026", the usual Georgian format. */
+export function formatDateGeorgian(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}.${month}.${year}`;
+}
+
 /** Example: formatArea(48.5) returns "48.5 მ²". */
 export function formatArea(areaSqm: number): string {
   return `${formatNumber(areaSqm, 0, 2)} მ²`;

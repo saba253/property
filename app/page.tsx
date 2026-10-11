@@ -2,6 +2,10 @@ import Link from "next/link";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import { buttonPrimary, buttonSecondary, pageContainer } from "@/components/ui/styles";
+import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
+import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { getDisplayPrice } from "@/lib/pricing/display-price";
+import { buildListingDetailHref } from "@/lib/properties/filter-chips";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 
 const features = [
@@ -27,8 +31,9 @@ const principles = [
   "შედარებები ეფუძნება განცხადებებში მითითებულ ფასებს და არა გარიგების დადასტურებულ ფასებს.",
 ];
 
-export default function Home() {
+export default async function Home() {
   const [exampleListing] = getActiveDemoListingsWithProperties();
+  const rateState = await getExchangeRateState();
 
   return (
     <main id="top" className="flex-1">
@@ -70,7 +75,16 @@ export default function Home() {
 
           {exampleListing && (
             <figure className="mx-auto w-full max-w-sm lg:max-w-md">
-              <ListingCard {...exampleListing} />
+              <ListingCard
+                {...exampleListing}
+                price={getDisplayPrice(
+                  exampleListing.listing.askingPrice,
+                  exampleListing.property.areaSqm,
+                  DEFAULT_DISPLAY_CURRENCY,
+                  rateState,
+                )}
+                href={buildListingDetailHref(exampleListing.listing.id)}
+              />
               <figcaption className="mt-4 flex items-center gap-2 px-1 text-sm text-muted">
                 <DemoBadge />
                 დემო განცხადების მაგალითი ავტომატური ფასით მ²-ზე

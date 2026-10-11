@@ -2,13 +2,22 @@ import Link from "next/link";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { PricePerSqmChip } from "@/components/properties/price-per-sqm";
 import { PropertyIllustration } from "@/components/properties/property-illustration";
-import { formatArea, formatMoney } from "@/lib/pricing/format-money";
-import { calculateAskingPricePerSqm } from "@/lib/pricing/price-per-sqm";
+import type { DisplayPrice } from "@/lib/pricing/display-price";
+import {
+  formatDisplayAmount,
+  formatDisplayPricePerSqm,
+  originalPriceNote,
+} from "@/lib/pricing/format-display-price";
+import { formatArea } from "@/lib/pricing/format-money";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 
-export function ListingCard({ listing, property }: ListingWithProperty) {
-  const { amount, currency } = listing.askingPrice;
-  const pricePerSqm = calculateAskingPricePerSqm(amount, property.areaSqm);
+type ListingCardProps = ListingWithProperty & {
+  price: DisplayPrice;
+  href: string;
+};
+
+export function ListingCard({ listing, property, price, href }: ListingCardProps) {
+  const pricePerSqm = formatDisplayPricePerSqm(price);
   const facts = [
     property.rooms !== undefined ? `${property.rooms} ოთახი` : null,
     formatArea(property.areaSqm),
@@ -16,7 +25,7 @@ export function ListingCard({ listing, property }: ListingWithProperty) {
   ].filter((fact): fact is string => fact !== null);
 
   return (
-    <Link href={`/properties/${listing.id}`} className="group block rounded-card">
+    <Link href={href} className="group block rounded-card">
       <div className="relative">
         <PropertyIllustration
           seed={listing.id}
@@ -33,12 +42,10 @@ export function ListingCard({ listing, property }: ListingWithProperty) {
         <p className="mt-0.5 text-sm text-muted">{facts.join(" · ")}</p>
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-lg font-bold text-ink">
-            {formatMoney(amount, currency)}
-            <span className="sr-only">, მითითებული ფასი, ვალუტა {currency}</span>
-          </p>
-          <PricePerSqmChip pricePerSqm={pricePerSqm} currency={currency} />
+          <p className="text-lg font-bold text-ink">{formatDisplayAmount(price)}</p>
+          {pricePerSqm && <PricePerSqmChip text={pricePerSqm} />}
         </div>
+        <p className="mt-0.5 text-xs text-subtle">{originalPriceNote(price)}</p>
       </div>
     </Link>
   );

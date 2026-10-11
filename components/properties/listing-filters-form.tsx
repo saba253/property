@@ -3,6 +3,7 @@ import Link from "next/link";
 import { card, fieldInput, fieldLabel } from "@/components/ui/styles";
 import type { City } from "@/lib/properties/cities";
 import type { NumericFilterKey } from "@/lib/properties/listing-filters";
+import type { Currency } from "@/lib/properties/types";
 
 /** Initial values of the form fields, as strings. Empty string means "not set". */
 export type ListingFilterFormValues = {
@@ -13,7 +14,10 @@ export type ListingFilterFormValues = {
 type ListingFiltersFormProps = {
   cities: readonly City[];
   values: ListingFilterFormValues;
+  /** Currency of the budget fields; kept on submit through a hidden field. */
+  display: Currency;
   showReset: boolean;
+  resetHref: string;
 };
 
 function NumberInput({
@@ -86,9 +90,17 @@ function RangeFieldset({
   );
 }
 
-export function ListingFiltersForm({ cities, values, showReset }: ListingFiltersFormProps) {
+export function ListingFiltersForm({
+  cities,
+  values,
+  display,
+  showReset,
+  resetHref,
+}: ListingFiltersFormProps) {
+  const symbol = display === "USD" ? "$" : "₾";
   return (
     <Form action="/properties" aria-label="განცხადებების ფილტრები" className={`${card} p-4 sm:p-5`}>
+      <input type="hidden" name="display" value={display} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1.6fr_1.6fr_auto] lg:items-end">
         <div>
           <label htmlFor="filter-city" className={fieldLabel}>
@@ -106,27 +118,27 @@ export function ListingFiltersForm({ cities, values, showReset }: ListingFilters
 
         <div>
           <label htmlFor="filter-currency" className={fieldLabel}>
-            ვალუტა
+            ორიგინალი ვალუტა
           </label>
           <select
             id="filter-currency"
             name="currency"
             defaultValue={values.currency}
-            aria-describedby="filter-price-hint"
+            aria-describedby="filter-currency-hint"
             className={fieldInput}
           >
-            <option value="">ყველა</option>
+            <option value="">ნებისმიერი</option>
             <option value="USD">USD ($)</option>
             <option value="GEL">GEL (₾)</option>
           </select>
         </div>
 
         <RangeFieldset
-          legend="მითითებული ფასი"
+          legend={`ბიუჯეტი (${symbol} ${display})`}
           minName="minPrice"
           maxName="maxPrice"
-          minLabel="მინიმალური ფასი"
-          maxLabel="მაქსიმალური ფასი"
+          minLabel={`მინიმალური ბიუჯეტი, ${display}`}
+          maxLabel={`მაქსიმალური ბიუჯეტი, ${display}`}
           values={values}
           describedBy="filter-price-hint"
         />
@@ -152,13 +164,18 @@ export function ListingFiltersForm({ cities, values, showReset }: ListingFilters
       </div>
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <p id="filter-price-hint" className="text-xs leading-5 text-muted">
-          ფასით ფილტრაციისთვის აირჩიეთ ვალუტა. USD და GEL ფასები ერთმანეთს არ ედრება და არ
-          კონვერტირდება.
-        </p>
+        <div className="space-y-1 text-xs leading-5 text-muted">
+          <p id="filter-price-hint">
+            ბიუჯეტი მითითებულია {display}-ში. სხვა ვალუტაში განთავსებული განცხადებები ეროვნული
+            ბანკის ოფიციალური კურსით სავარაუდოდ შედარდება.
+          </p>
+          <p id="filter-currency-hint">
+            „ორიგინალი ვალუტა“ აჩვენებს მხოლოდ იმ განცხადებებს, რომელთა ფასი თავიდანვე ამ ვალუტაშია.
+          </p>
+        </div>
         {showReset && (
           <Link
-            href="/properties"
+            href={resetHref}
             className="shrink-0 text-sm font-semibold text-accent-700 underline-offset-4 hover:underline"
           >
             ფილტრების გასუფთავება

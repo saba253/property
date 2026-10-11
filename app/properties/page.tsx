@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { CurrencyToggle } from "@/components/currency/currency-toggle";
+import { RateNotice } from "@/components/currency/rate-notice";
 import { DemoNotice } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import {
@@ -8,19 +10,27 @@ import {
   type ListingFilterFormValues,
 } from "@/components/properties/listing-filters-form";
 import { buttonPrimary, pageContainer } from "@/components/ui/styles";
+import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { getDisplayPrice } from "@/lib/pricing/display-price";
 import { getCitiesPresentIn } from "@/lib/properties/cities";
-import { getFilterChips } from "@/lib/properties/filter-chips";
+import {
+  buildListingDetailHref,
+  buildListingsHref,
+  getFilterChips,
+} from "@/lib/properties/filter-chips";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 import {
   type FilterIssue,
   type NumericFilterKey,
   type ParsedListingFilters,
   type RawQuery,
+  convertBudgetForDisplay,
   filterListings,
   hasActiveFilters,
   parseListingFilters,
   parseNonNegativeNumber,
 } from "@/lib/properties/listing-filters";
+import type { Currency } from "@/lib/properties/types";
 
 export const metadata: Metadata = {
   title: "დემო განცხადებები | Property Intelligence",
@@ -29,8 +39,8 @@ export const metadata: Metadata = {
 };
 
 const NUMERIC_FIELD_LABELS: Record<NumericFilterKey, string> = {
-  minPrice: "მინიმალური ფასი",
-  maxPrice: "მაქსიმალური ფასი",
+  minPrice: "მინიმალური ბიუჯეტი",
+  maxPrice: "მაქსიმალური ბიუჯეტი",
   minArea: "მინიმალური ფართი",
   maxArea: "მაქსიმალური ფართი",
 };
@@ -40,22 +50,19 @@ function issueMessage(issue: FilterIssue): string {
     case "invalid-city":
       return "მითითებული ქალაქი ვერ მოიძებნა, ამიტომ ქალაქის ფილტრი არ გამოიყენება.";
     case "invalid-currency":
-      return "მითითებული ვალუტა არასწორია. ხელმისაწვდომია მხოლოდ USD და GEL.";
+      return "მითითებული ორიგინალი ვალუტა არასწორია. ხელმისაწვდომია მხოლოდ USD და GEL.";
+    case "invalid-display-currency":
+      return "მითითებული ჩვენების ვალუტა არასწორია, ამიტომ ფასები ნაჩვენებია USD-ში.";
     case "invalid-number":
       return `${NUMERIC_FIELD_LABELS[issue.field]}: მნიშვნელობა არასწორია და არ გამოიყენება.`;
-    case "price-needs-currency":
-      return "ფასის ფილტრი არ გამოიყენება, რადგან ვალუტა არ არის არჩეული. აირჩიეთ USD ან GEL.";
     case "swapped-price-range":
-      return "მინიმალური ფასი მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
+      return "მინიმალური ბიუჯეტი მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
     case "swapped-area-range":
       return "მინიმალური ფართი მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
   }
 }
 
-/**
- * Form values to show after submission. Valid numbers stay in the form even when a price limit
- * was ignored for lack of a currency, so the user only has to pick one.
- */
+/** Form values to show after submission, so the fields always match the current URL. */
 function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): ListingFilterFormValues {
   const numeric = (key: NumericFilterKey): string => {
     const raw = query[key];
@@ -66,7 +73,7 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
 
   return {
     city: filters.citySlug ?? "",
-    currency: filters.currency ?? "",
+    currency: filters.originalCurrency ?? "",
     minPrice: numeric("minPrice"),
     maxPrice: numeric("maxPrice"),
     minArea: numeric("minArea"),
@@ -76,22 +83,41 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
 
 async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">, "searchParams">) {
   const query = await searchParams;
+  // One exchange-rate snapshot for the whole request: filtering and display both use it.
+  const rateState = await getExchangeRateState();
   const parsed = parseListingFilters(query);
+  const { filters, display } = parsed;
   const allItems = getActiveDemoListingsWithProperties();
-  const items = filterListings(allItems, parsed.filters);
+  const { matches, notComparableCount } = filterListings(allItems, filters, display, rateState);
   const cities = getCitiesPresentIn(allItems.map((item) => item.property.city));
   const values = toFormValues(query, parsed);
-  const filtersActive = hasActiveFilters(parsed.filters);
-  const chips = getFilterChips(parsed.filters);
+  const filtersActive = hasActiveFilters(filters);
+  const chips = getFilterChips(filters, display);
+  const otherCurrency: Currency = display === "USD" ? "GEL" : "USD";
+  const otherHref = buildListingsHref(
+    convertBudgetForDisplay(filters, display, otherCurrency, rateState),
+    otherCurrency,
+  );
+  const toggleHrefs: Record<Currency, string> =
+    display === "USD"
+      ? { USD: buildListingsHref(filters, "USD"), GEL: otherHref }
+      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL") };
+  const resultsIncomplete = notComparableCount > 0;
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <CurrencyToggle current={display} hrefFor={toggleHrefs} />
+      </div>
+
       {/* The key remounts the form so its fields always match the current URL. */}
       <ListingFiltersForm
-        key={JSON.stringify(values)}
+        key={JSON.stringify({ values, display })}
         cities={cities}
         values={values}
+        display={display}
         showReset={filtersActive || parsed.issues.length > 0}
+        resetHref={buildListingsHref({}, display)}
       />
 
       {parsed.issues.length > 0 && (
@@ -102,11 +128,26 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         </ul>
       )}
 
+      {resultsIncomplete && (
+        <p
+          role="alert"
+          className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"
+        >
+          <strong className="font-semibold">შედეგები არასრულია.</strong> გაცვლითი კურსი
+          მიუწვდომელია, ამიტომ {notComparableCount} განცხადება, რომლის ორიგინალი ფასი{" "}
+          {otherCurrency}-შია, ბიუჯეტთან ვერ შედარდა და სიაში არ არის. სცადეთ მოგვიანებით ან
+          მოხსენით ბიუჯეტის ფილტრი.
+        </p>
+      )}
+
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p role="status" className="text-base font-semibold text-ink">
-          ნაპოვნია {items.length} განცხადება
+          ნაპოვნია {matches.length} განცხადება
           {filtersActive ? (
             <span className="font-normal text-muted"> (სულ {allItems.length})</span>
+          ) : null}
+          {resultsIncomplete ? (
+            <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
           ) : null}
         </p>
 
@@ -130,11 +171,20 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         )}
       </div>
 
-      {items.length > 0 ? (
+      {matches.length > 0 ? (
         <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item) => (
+          {matches.map((item) => (
             <li key={item.listing.id}>
-              <ListingCard {...item} />
+              <ListingCard
+                {...item}
+                price={getDisplayPrice(
+                  item.listing.askingPrice,
+                  item.property.areaSqm,
+                  display,
+                  rateState,
+                )}
+                href={buildListingDetailHref(item.listing.id, display)}
+              />
             </li>
           ))}
         </ul>
@@ -160,13 +210,17 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
             ამ ფილტრებით განცხადება ვერ მოიძებნა
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-            სცადეთ ფასის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
+            სცადეთ ბიუჯეტის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
           </p>
-          <Link href="/properties" className={`${buttonPrimary} mt-6`}>
+          <Link href={buildListingsHref({}, display)} className={`${buttonPrimary} mt-6`}>
             ფილტრების გასუფთავება
           </Link>
         </div>
       )}
+
+      <div className="mt-10">
+        <RateNotice rateState={rateState} />
+      </div>
     </>
   );
 }
@@ -196,7 +250,7 @@ export default function DemoListingsPage({ searchParams }: PageProps<"/propertie
             </h1>
             <p className="mt-2 text-base leading-7 text-muted">
               შეადარეთ განცხადებებში მითითებული ფასები და ფასი კვადრატულ მეტრზე. ფასები ნაჩვენებია
-              განცხადების ვალუტაში და არ კონვერტირდება.
+              არჩეულ ვალუტაში (ნაგულისხმევად USD), ორიგინალი ფასი კი ყოველთვის მითითებულია.
             </p>
           </div>
 

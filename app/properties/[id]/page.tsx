@@ -1,13 +1,23 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { RateNotice } from "@/components/currency/rate-notice";
 import { DemoBadge, DemoNotice } from "@/components/properties/demo-label";
+import {
+  BackToListingsLink,
+  BackToListingsLinkView,
+  DetailPriceFormula,
+  DetailPriceFormulaView,
+  DetailPriceSummary,
+  DetailPriceSummaryView,
+  type PricesByCurrency,
+} from "@/components/properties/detail-pricing";
 import { type Fact, FactList } from "@/components/properties/fact-list";
-import { PricePerSqmCallout } from "@/components/properties/price-per-sqm";
 import { PropertyIllustration } from "@/components/properties/property-illustration";
-import { buttonSecondary, card, pageContainer } from "@/components/ui/styles";
-import { formatArea, formatMoney, formatPricePerSqm } from "@/lib/pricing/format-money";
-import { calculateAskingPricePerSqm } from "@/lib/pricing/price-per-sqm";
+import { card, pageContainer } from "@/components/ui/styles";
+import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { getDisplayPrice } from "@/lib/pricing/display-price";
+import { formatArea } from "@/lib/pricing/format-money";
 import { getDemoListingIds, getDemoListingWithProperty } from "@/lib/properties/get-demo-listing";
 
 type PageProps = {
@@ -45,8 +55,13 @@ export default async function PropertyDetailPage({ params }: PageProps) {
   }
 
   const { listing, property } = data;
-  const { amount, currency } = listing.askingPrice;
-  const pricePerSqm = calculateAskingPricePerSqm(amount, property.areaSqm);
+  const { currency } = listing.askingPrice;
+  // One rate snapshot; both currencies are prepared so the client can switch without a fetch.
+  const rateState = await getExchangeRateState();
+  const prices: PricesByCurrency = {
+    USD: getDisplayPrice(listing.askingPrice, property.areaSqm, "USD", rateState),
+    GEL: getDisplayPrice(listing.askingPrice, property.areaSqm, "GEL", rateState),
+  };
 
   // Optional facts are shown only when the listing states them; nothing is invented to fill gaps.
   const facts: Fact[] = [
@@ -55,17 +70,14 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     { label: "ფართი", value: formatArea(property.areaSqm) },
     ...(property.rooms !== undefined ? [{ label: "ოთახები", value: String(property.rooms) }] : []),
     ...(property.floor !== undefined ? [{ label: "სართული", value: String(property.floor) }] : []),
-    { label: "ვალუტა", value: currency },
+    { label: "ორიგინალი ვალუტა", value: currency },
   ];
 
   return (
     <main className={`${pageContainer} flex-1 py-6 sm:py-10`}>
-      <Link
-        href="/properties"
-        className="inline-flex items-center gap-1 rounded-full text-sm font-medium text-muted hover:text-ink"
-      >
-        ← დემო განცხადებები
-      </Link>
+      <Suspense fallback={<BackToListingsLinkView display="USD" />}>
+        <BackToListingsLink />
+      </Suspense>
 
       <div className="mt-4">
         <DemoNotice title="დემო განცხადება.">
@@ -102,16 +114,22 @@ export default async function PropertyDetailPage({ params }: PageProps) {
             <h2 id="calculation-heading" className="text-xl font-semibold text-navy">
               როგორ გამოითვლება ფასი კვადრატულ მეტრზე
             </h2>
-            <p className="mt-3 rounded-2xl border border-line bg-surface p-4 text-base font-medium text-ink">
-              {formatMoney(amount, currency)} ÷ {formatArea(property.areaSqm)} ={" "}
-              <span className="text-accent-700">{formatPricePerSqm(pricePerSqm, currency)}</span>
-            </p>
+            <Suspense
+              fallback={
+                <DetailPriceFormulaView prices={prices} areaSqm={property.areaSqm} display="USD" />
+              }
+            >
+              <DetailPriceFormula prices={prices} areaSqm={property.areaSqm} />
+            </Suspense>
             <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
               <p>
                 ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის მიხედვით.
                 ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან ღირებულებას.
               </p>
-              <p>ფასები ნაჩვენებია განცხადების ვალუტაში ({currency}) და არ კონვერტირდება.</p>
+              <p>
+                ორიგინალი ფასი და ვალუტა ({currency}) არ იცვლება. სხვა ვალუტაში ნაჩვენები ფასი
+                სავარაუდოა და ეროვნული ბანკის ოფიციალური კურსით გამოითვლება.
+              </p>
             </div>
           </section>
 
@@ -128,17 +146,16 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
         <aside aria-label="ფასის შეჯამება" className="lg:sticky lg:top-24 lg:self-start">
           <div className={`${card} p-5`}>
-            <p className="text-sm text-muted">განცხადებაში მითითებული ფასი</p>
-            <p className="mt-1 text-3xl font-bold text-ink">{formatMoney(amount, currency)}</p>
-            <p className="mt-1 text-xs text-subtle">ვალუტა: {currency}</p>
-
-            <div className="mt-5">
-              <PricePerSqmCallout pricePerSqm={pricePerSqm} currency={currency} />
-            </div>
-
-            <Link href="/properties" className={`${buttonSecondary} mt-5 w-full`}>
-              სხვა დემო განცხადებები
-            </Link>
+            <Suspense
+              fallback={
+                <DetailPriceSummaryView listingId={listing.id} prices={prices} display="USD" />
+              }
+            >
+              <DetailPriceSummary listingId={listing.id} prices={prices} />
+            </Suspense>
+          </div>
+          <div className="mt-4">
+            <RateNotice rateState={rateState} />
           </div>
         </aside>
       </div>

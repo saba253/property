@@ -1,3 +1,10 @@
+import {
+  DEFAULT_DISPLAY_CURRENCY,
+  type ExchangeRateState,
+  convertAmount,
+  roundToWholeUnits,
+} from "@/lib/currency/exchange-rate";
+import { getDisplayPrice } from "@/lib/pricing/display-price";
 import { findCityBySlug } from "@/lib/properties/cities";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import type { Currency } from "@/lib/properties/types";
@@ -5,12 +12,14 @@ import type { Currency } from "@/lib/properties/types";
 /**
  * Filters for the demo listings index. All fields are optional; a missing field means "any".
  *
- * Price limits are only meaningful together with `currency`: USD and GEL prices are never
- * compared with each other, and there is no currency conversion.
+ * - `minPrice`/`maxPrice` are a budget in the display currency (USD by default). Listings in
+ *   the other currency are compared using the official exchange rate for the request.
+ * - `originalCurrency` optionally limits results to listings originally priced in USD or GEL.
+ *   It is unrelated to the display currency.
  */
 export type ListingFilters = {
   citySlug?: string;
-  currency?: Currency;
+  originalCurrency?: Currency;
   minPrice?: number;
   maxPrice?: number;
   minArea?: number;
@@ -23,13 +32,15 @@ export type NumericFilterKey = "minPrice" | "maxPrice" | "minArea" | "maxArea";
 export type FilterIssue =
   | { code: "invalid-city" }
   | { code: "invalid-currency" }
+  | { code: "invalid-display-currency" }
   | { code: "invalid-number"; field: NumericFilterKey }
-  | { code: "price-needs-currency" }
   | { code: "swapped-price-range" }
   | { code: "swapped-area-range" };
 
 export type ParsedListingFilters = {
   filters: ListingFilters;
+  /** Currency for showing prices and for the budget. Defaults to USD. */
+  display: Currency;
   issues: FilterIssue[];
 };
 
@@ -46,6 +57,11 @@ function readParam(query: RawQuery, key: string): string | undefined {
   return value ? value : undefined;
 }
 
+function parseCurrency(value: string): Currency | undefined {
+  const upper = value.toUpperCase();
+  return CURRENCIES.find((item) => item === upper);
+}
+
 /** Accepts plain non-negative numbers; spaces and commas are allowed as thousands separators. */
 export function parseNonNegativeNumber(value: string): number | null {
   const normalized = value.replace(/[\s,]/g, "");
@@ -56,12 +72,26 @@ export function parseNonNegativeNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Reads the display currency (`display`); missing or invalid values fall back to USD. */
+export function parseDisplayCurrency(query: RawQuery): {
+  display: Currency;
+  issue: FilterIssue | null;
+} {
+  const raw = readParam(query, "display");
+  if (!raw) {
+    return { display: DEFAULT_DISPLAY_CURRENCY, issue: null };
+  }
+  const display = parseCurrency(raw);
+  return display
+    ? { display, issue: null }
+    : { display: DEFAULT_DISPLAY_CURRENCY, issue: { code: "invalid-display-currency" } };
+}
+
 /**
  * Validates and normalizes query parameters into filters.
  *
  * - Unknown cities, unknown currencies, and invalid numbers are dropped and reported.
  * - A min greater than its max is swapped and reported.
- * - Price limits without a currency are dropped and reported, so currencies are never mixed.
  */
 export function parseListingFilters(query: RawQuery): ParsedListingFilters {
   const filters: ListingFilters = {};
@@ -76,14 +106,19 @@ export function parseListingFilters(query: RawQuery): ParsedListingFilters {
     }
   }
 
-  const currency = readParam(query, "currency")?.toUpperCase();
-  if (currency) {
-    const match = CURRENCIES.find((item) => item === currency);
-    if (match) {
-      filters.currency = match;
+  const rawCurrency = readParam(query, "currency");
+  if (rawCurrency) {
+    const originalCurrency = parseCurrency(rawCurrency);
+    if (originalCurrency) {
+      filters.originalCurrency = originalCurrency;
     } else {
       issues.push({ code: "invalid-currency" });
     }
+  }
+
+  const { display, issue: displayIssue } = parseDisplayCurrency(query);
+  if (displayIssue) {
+    issues.push(displayIssue);
   }
 
   for (const key of NUMERIC_KEYS) {
@@ -117,55 +152,88 @@ export function parseListingFilters(query: RawQuery): ParsedListingFilters {
     issues.push({ code: "swapped-area-range" });
   }
 
-  if (!filters.currency && (filters.minPrice !== undefined || filters.maxPrice !== undefined)) {
-    delete filters.minPrice;
-    delete filters.maxPrice;
-    issues.push({ code: "price-needs-currency" });
-  }
-
-  return { filters, issues };
+  return { filters, display, issues };
 }
 
-/** True when at least one filter is set. */
+/** True when at least one filter is set. The display currency is a view setting, not a filter. */
 export function hasActiveFilters(filters: ListingFilters): boolean {
   return Object.values(filters).some((value) => value !== undefined);
 }
 
+export function hasPriceFilter(filters: ListingFilters): boolean {
+  return filters.minPrice !== undefined || filters.maxPrice !== undefined;
+}
+
+export type ListingFilterResult = {
+  matches: ListingWithProperty[];
+  /**
+   * Listings that met every other filter but could not be compared with the budget, because
+   * they are priced in another currency and no exchange rate is available.
+   */
+  notComparableCount: number;
+};
+
 /**
  * Returns the active listings that match every filter, in their original order.
- * Inactive listings are always excluded. Prices are compared only within the chosen currency.
+ * Inactive listings are always excluded. The budget is compared with the same rounded display
+ * price that the UI shows, using one exchange-rate snapshot for the whole request.
  */
 export function filterListings(
   items: readonly ListingWithProperty[],
   filters: ListingFilters,
-): ListingWithProperty[] {
+  display: Currency,
+  rateState: ExchangeRateState,
+): ListingFilterResult {
   const cityName = filters.citySlug ? findCityBySlug(filters.citySlug)?.name : undefined;
+  const matches: ListingWithProperty[] = [];
+  let notComparableCount = 0;
 
-  return items.filter(({ listing, property }) => {
-    if (listing.status !== "active") {
-      return false;
+  for (const item of items) {
+    const { listing, property } = item;
+    if (listing.status !== "active") continue;
+    if (filters.citySlug && property.city !== cityName) continue;
+    if (filters.originalCurrency && listing.askingPrice.currency !== filters.originalCurrency) {
+      continue;
     }
-    if (filters.citySlug && property.city !== cityName) {
-      return false;
-    }
-    if (filters.currency) {
-      const { amount, currency } = listing.askingPrice;
-      if (currency !== filters.currency) {
-        return false;
+    if (filters.minArea !== undefined && property.areaSqm < filters.minArea) continue;
+    if (filters.maxArea !== undefined && property.areaSqm > filters.maxArea) continue;
+
+    if (hasPriceFilter(filters)) {
+      const { amount } = getDisplayPrice(listing.askingPrice, property.areaSqm, display, rateState);
+      if (amount === null) {
+        notComparableCount++;
+        continue;
       }
-      if (filters.minPrice !== undefined && amount < filters.minPrice) {
-        return false;
-      }
-      if (filters.maxPrice !== undefined && amount > filters.maxPrice) {
-        return false;
-      }
+      if (filters.minPrice !== undefined && amount < filters.minPrice) continue;
+      if (filters.maxPrice !== undefined && amount > filters.maxPrice) continue;
     }
-    if (filters.minArea !== undefined && property.areaSqm < filters.minArea) {
-      return false;
-    }
-    if (filters.maxArea !== undefined && property.areaSqm > filters.maxArea) {
-      return false;
-    }
-    return true;
-  });
+
+    matches.push(item);
+  }
+
+  return { matches, notComparableCount };
+}
+
+/**
+ * Re-expresses the budget when the user switches display currency, so "up to $100,000" becomes
+ * roughly the same budget in lari instead of "up to ₾100,000". Without a rate the budget is
+ * dropped rather than reinterpreted.
+ */
+export function convertBudgetForDisplay(
+  filters: ListingFilters,
+  from: Currency,
+  to: Currency,
+  rateState: ExchangeRateState,
+): ListingFilters {
+  if (from === to || !hasPriceFilter(filters)) {
+    return filters;
+  }
+  if (rateState.status !== "available") {
+    return { ...filters, minPrice: undefined, maxPrice: undefined };
+  }
+  const convert = (value: number | undefined) =>
+    value === undefined
+      ? undefined
+      : roundToWholeUnits(convertAmount(value, from, to, rateState.rate));
+  return { ...filters, minPrice: convert(filters.minPrice), maxPrice: convert(filters.maxPrice) };
 }

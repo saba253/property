@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatArea, formatMoney, formatPricePerSqm } from "@/lib/pricing/format-money";
+import {
+  formatArea,
+  formatDateGeorgian,
+  formatExchangeRate,
+  formatMoney,
+  formatPricePerSqm,
+} from "@/lib/pricing/format-money";
 
 describe("formatMoney", () => {
   it("formats USD with a dollar sign and thousands separators", () => {
@@ -32,5 +38,18 @@ describe("formatArea", () => {
 
   it("shows fractional areas", () => {
     expect(formatArea(48.5)).toBe("48.5 მ²");
+  });
+});
+
+describe("formatExchangeRate", () => {
+  it("shows the rate with four decimals, as NBG publishes it", () => {
+    expect(formatExchangeRate(2.6005)).toBe("1 USD = 2.6005 GEL");
+    expect(formatExchangeRate(2.7)).toBe("1 USD = 2.7000 GEL");
+  });
+});
+
+describe("formatDateGeorgian", () => {
+  it("formats an ISO date as DD.MM.YYYY", () => {
+    expect(formatDateGeorgian("2026-10-10")).toBe("10.10.2026");
   });
 });
