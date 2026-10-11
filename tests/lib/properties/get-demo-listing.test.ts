@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getDemoListingIds, getDemoListingWithProperty } from "@/lib/properties/get-demo-listing";
+import {
+  getActiveDemoListingsWithProperties,
+  getDemoListingIds,
+  getDemoListingWithProperty,
+} from "@/lib/properties/get-demo-listing";
 
 describe("getDemoListingWithProperty", () => {
   it("returns the listing together with its property", () => {
@@ -17,5 +21,25 @@ describe("getDemoListingWithProperty", () => {
 describe("getDemoListingIds", () => {
   it("returns every demo listing id", () => {
     expect(getDemoListingIds()).toEqual(["demo-listing-1", "demo-listing-2"]);
+  });
+});
+
+describe("getActiveDemoListingsWithProperties", () => {
+  it("returns every active demo listing in data order", () => {
+    const ids = getActiveDemoListingsWithProperties().map((item) => item.listing.id);
+    expect(ids).toEqual(["demo-listing-1", "demo-listing-2"]);
+  });
+
+  it("pairs each listing with its own property", () => {
+    for (const { listing, property } of getActiveDemoListingsWithProperties()) {
+      expect(property.id).toBe(listing.propertyId);
+    }
+  });
+
+  it("returns only active, demo-flagged listings", () => {
+    for (const { listing } of getActiveDemoListingsWithProperties()) {
+      expect(listing.status).toBe("active");
+      expect(listing.dataSource).toBe("demo");
+    }
   });
 });

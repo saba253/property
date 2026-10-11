@@ -53,17 +53,14 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
-## Current state
-
-## Current state
-
-- Last completed step: Step 1.5 - Demo property detail page.
-- What works: Passing locally: lint, typecheck, formatting, 25 tests, build, and browser checks. GitHub Actions CI was confirmed green for Steps 1.3 and 1.4. Step 1.5 CI is not yet confirmed.
-- Demo detail page: `/properties/[id]` shows a clearly labeled demo listing with title, location, asking price, area, currency, and automatically calculated asking price per square metre. Demo pages are marked noindex and are not linked from the homepage. Unknown listing ids display the Georgian 404 page.
+- Last completed step: Step 1.6 - Demo listings index page.
+- What works: Passing locally: lint, typecheck, formatting, 28 tests, build, and browser checks. GitHub Actions CI was confirmed green for Steps 1.3 and 1.4. CI for Steps 1.5 and 1.6 is not yet confirmed.
+- Demo detail page: `/properties/[id]` shows a clearly labeled demo listing with title, location, asking price, area, currency, and automatically calculated asking price per square metre. It links back to the demo listings index. Unknown listing ids display the Georgian 404 page.
+- Demo listings index: `/properties` lists every active demo listing as a card (title, location, asking price, area, asking price per square metre) linking to its detail page, with a demo warning banner. Data comes from `getActiveDemoListingsWithProperties()` in `lib/properties/get-demo-listing.ts`. All demo pages are marked noindex and are not linked from the homepage yet.
 - Data model: `lib/properties/types.ts` defines Property, Listing, Money, and Currency. `lib/properties/demo-data.ts` contains two invented examples, one USD and one GEL.
 - Pricing: `lib/pricing/price-per-sqm.ts` calculates asking price per square metre. `lib/pricing/format-money.ts` formats prices and areas without currency conversion.
 - Homepage: Georgian-first landing page from Step 1.4.
 - Technical notes: The Vitest `@/` alias matches `tsconfig.json`. `typecheck` runs Next.js type generation first. The `dynamicParams` route configuration was removed because it is incompatible with the enabled `cacheComponents` setting.
-- Known issues: Vitest uses the Node environment only. The original smoke test and starter SVG files remain. English localization is not implemented. There is no listings index page yet. OneDrive may interfere with the `.next` build cache on Windows.
+- Known issues: Vitest uses the Node environment only. The original smoke test and starter SVG files remain. English localization is not implemented. OneDrive may interfere with the `.next` build cache on Windows.
 - Environment variables: None configured yet.
-- Next step: Step 1.6 - to be planned.
+- Next step: Step 1.7 - to be planned.

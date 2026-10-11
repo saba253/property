@@ -38,8 +38,8 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
-        ← მთავარ გვერდზე დაბრუნება
+      <Link href="/properties" className="text-sm text-slate-600 hover:text-slate-900">
+        ← დემო განცხადებები
       </Link>
 
       <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
