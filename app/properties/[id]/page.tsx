@@ -9,6 +9,13 @@ type PageProps = {
   params: Promise<{ id: string }>;
 };
 
+// With partialPrefetching, unknown ids would otherwise stream the App Shell first and commit
+// HTTP 200 before notFound() runs. "navigation" waits for the full render, so they return 404.
+export const ensureStatic = "navigation";
+// The page awaits params outside <Suspense> on purpose (so notFound() can set the status).
+// This turns off only the instant-navigation check; ensureStatic's static check still applies.
+export const instant = false;
+
 export function generateStaticParams() {
   return getDemoListingIds().map((id) => ({ id }));
 }
