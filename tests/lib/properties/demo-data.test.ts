@@ -45,6 +45,52 @@ describe("demo data", () => {
     }
   });
 
+  it("uses valid whole numbers for optional bedrooms, bathrooms, and total floors", () => {
+    for (const property of demoProperties) {
+      if (property.bedrooms !== undefined) {
+        expect(Number.isInteger(property.bedrooms) && property.bedrooms >= 0).toBe(true);
+      }
+      for (const value of [property.bathrooms, property.totalFloors]) {
+        if (value !== undefined) {
+          expect(Number.isInteger(value) && value > 0).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keeps bedrooms below total rooms and the floor within the building", () => {
+    for (const property of demoProperties) {
+      if (property.bedrooms !== undefined && property.rooms !== undefined) {
+        expect(property.bedrooms).toBeLessThan(property.rooms);
+      }
+      if (property.floor !== undefined && property.totalFloors !== undefined) {
+        expect(property.floor).toBeLessThanOrEqual(property.totalFloors);
+      }
+    }
+  });
+
+  it("uses only valid amenity states", () => {
+    const valid = ["yes", "no", "unknown"];
+    for (const property of demoProperties) {
+      for (const status of Object.values(property.features ?? {})) {
+        expect(valid).toContain(status);
+      }
+    }
+    for (const listing of demoListings) {
+      for (const status of Object.values(listing.equipment ?? {})) {
+        expect(valid).toContain(status);
+      }
+    }
+  });
+
+  it("has six demo listings in Tbilisi and Batumi", () => {
+    expect(demoListings).toHaveLength(6);
+    expect([...new Set(demoProperties.map((property) => property.city))].sort()).toEqual([
+      "ბათუმი",
+      "თბილისი",
+    ]);
+  });
+
   it("covers both USD and GEL", () => {
     const currencies = [...new Set(demoListings.map((listing) => listing.askingPrice.currency))];
     expect(currencies.sort()).toEqual(["GEL", "USD"]);

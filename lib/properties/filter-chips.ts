@@ -1,14 +1,23 @@
 import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import { formatArea, formatMoney } from "@/lib/pricing/format-money";
+import { getAmenityDefinition } from "@/lib/properties/amenities";
 import { findCityBySlug } from "@/lib/properties/cities";
 import type { ListingFilters } from "@/lib/properties/listing-filters";
-import type { Currency } from "@/lib/properties/types";
+import type { AmenityKey, Currency } from "@/lib/properties/types";
 
 const LISTINGS_PATH = "/properties";
 
 /** One applied filter, shown as a removable chip. `removeHref` is the URL without it. */
 export type FilterChip = {
-  key: "city" | "originalCurrency" | "price" | "area";
+  key:
+    | "city"
+    | "originalCurrency"
+    | "price"
+    | "area"
+    | "bedrooms"
+    | "bathrooms"
+    | "floor"
+    | `amenity-${AmenityKey}`;
   label: string;
   removeHref: string;
 };
@@ -29,6 +38,11 @@ export function buildListingsHref(
   if (filters.maxPrice !== undefined) params.set("maxPrice", String(filters.maxPrice));
   if (filters.minArea !== undefined) params.set("minArea", String(filters.minArea));
   if (filters.maxArea !== undefined) params.set("maxArea", String(filters.maxArea));
+  if (filters.minBedrooms !== undefined) params.set("minBedrooms", String(filters.minBedrooms));
+  if (filters.minBathrooms !== undefined) params.set("minBathrooms", String(filters.minBathrooms));
+  if (filters.minFloor !== undefined) params.set("minFloor", String(filters.minFloor));
+  if (filters.maxFloor !== undefined) params.set("maxFloor", String(filters.maxFloor));
+  for (const amenity of filters.amenities ?? []) params.append("amenity", amenity);
 
   const query = params.toString();
   return query ? `${LISTINGS_PATH}?${query}` : LISTINGS_PATH;
@@ -82,6 +96,41 @@ export function getFilterChips(
       key: "area",
       label: `ფართი: ${rangeLabel(min, max)}`,
       removeHref: href({ ...filters, minArea: undefined, maxArea: undefined }),
+    });
+  }
+
+  if (filters.minBedrooms !== undefined) {
+    chips.push({
+      key: "bedrooms",
+      label: `საძინებელი: ${filters.minBedrooms}+`,
+      removeHref: href({ ...filters, minBedrooms: undefined }),
+    });
+  }
+
+  if (filters.minBathrooms !== undefined) {
+    chips.push({
+      key: "bathrooms",
+      label: `სველი წერტილი: ${filters.minBathrooms}+`,
+      removeHref: href({ ...filters, minBathrooms: undefined }),
+    });
+  }
+
+  if (filters.minFloor !== undefined || filters.maxFloor !== undefined) {
+    const min = filters.minFloor !== undefined ? String(filters.minFloor) : undefined;
+    const max = filters.maxFloor !== undefined ? String(filters.maxFloor) : undefined;
+    chips.push({
+      key: "floor",
+      label: `სართული: ${rangeLabel(min, max)}`,
+      removeHref: href({ ...filters, minFloor: undefined, maxFloor: undefined }),
+    });
+  }
+
+  for (const amenity of filters.amenities ?? []) {
+    const remaining = filters.amenities!.filter((key) => key !== amenity);
+    chips.push({
+      key: `amenity-${amenity}`,
+      label: getAmenityDefinition(amenity).label,
+      removeHref: href({ ...filters, amenities: remaining.length > 0 ? remaining : undefined }),
     });
   }
 

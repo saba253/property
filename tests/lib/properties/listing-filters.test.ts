@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ExchangeRateState } from "@/lib/currency/exchange-rate";
 import { getDisplayPrice } from "@/lib/pricing/display-price";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
+import type { Listing, Property } from "@/lib/properties/types";
 import {
   type ListingFilters,
   convertBudgetForDisplay,
+  countAdvancedFilters,
   filterListings,
   hasActiveFilters,
   parseDisplayCurrency,
@@ -27,6 +29,7 @@ function item(
   amount: number,
   currency: "USD" | "GEL",
   status: "active" | "inactive" = "active",
+  extra: { property?: Partial<Property>; listing?: Partial<Listing> } = {},
 ): ListingWithProperty {
   return {
     listing: {
@@ -36,8 +39,16 @@ function item(
       askingPrice: { amount, currency },
       status,
       dataSource: "demo",
+      ...extra.listing,
     },
-    property: { id: `p-${id}`, city, district: "x", areaSqm, dataSource: "demo" },
+    property: {
+      id: `p-${id}`,
+      city,
+      district: "x",
+      areaSqm,
+      dataSource: "demo",
+      ...extra.property,
+    },
   };
 }
 
@@ -271,5 +282,140 @@ describe("convertBudgetForDisplay", () => {
     expect(
       convertBudgetForDisplay({ citySlug: "batumi", maxPrice: 100000 }, "USD", "GEL", noRate),
     ).toEqual({ citySlug: "batumi", minPrice: undefined, maxPrice: undefined });
+  });
+});
+
+// Structural facts and amenities. "unknownFacts" states nothing, to test unknown handling.
+const detailed = [
+  item("big", "თბილისი", 92, 185000, "USD", "active", {
+    property: {
+      bedrooms: 3,
+      bathrooms: 2,
+      floor: 10,
+      features: { balcony: "yes", parking: "yes", elevator: "yes" },
+    },
+    listing: { equipment: { refrigerator: "yes", dishwasher: "yes" } },
+  }),
+  item("studio", "ბათუმი", 38, 62000, "USD", "active", {
+    property: { bedrooms: 0, bathrooms: 1, floor: 21, features: { balcony: "yes", parking: "no" } },
+    listing: { equipment: { refrigerator: "yes", dishwasher: "no" } },
+  }),
+  item("unknownFacts", "თბილისი", 54, 165000, "GEL"),
+];
+
+function runDetailed(filters: ListingFilters) {
+  return ids(filterListings(detailed, filters, "USD", rate));
+}
+
+describe("parseListingFilters: structure and amenities", () => {
+  it("parses bedrooms, bathrooms, floor range, and amenities", () => {
+    const result = parseListingFilters({
+      minBedrooms: "2",
+      minBathrooms: "1",
+      minFloor: "3",
+      maxFloor: "12",
+      amenity: ["parking", "balcony"],
+    });
+    expect(result.issues).toEqual([]);
+    expect(result.filters).toEqual({
+      minBedrooms: 2,
+      minBathrooms: 1,
+      minFloor: 3,
+      maxFloor: 12,
+      amenities: ["balcony", "parking"],
+    });
+  });
+
+  it("accepts a single amenity value and removes duplicates", () => {
+    expect(parseListingFilters({ amenity: "elevator" }).filters.amenities).toEqual(["elevator"]);
+    expect(parseListingFilters({ amenity: ["elevator", "elevator"] }).filters.amenities).toEqual([
+      "elevator",
+    ]);
+  });
+
+  it("drops unknown amenities and reports them", () => {
+    const result = parseListingFilters({ amenity: ["pool", "balcony", ""] });
+    expect(result.filters.amenities).toEqual(["balcony"]);
+    expect(result.issues).toEqual([{ code: "invalid-amenity" }]);
+  });
+
+  it("rejects non-integer or out-of-range counts", () => {
+    const result = parseListingFilters({
+      minBedrooms: "2.5",
+      minBathrooms: "0",
+      minFloor: "-1",
+      maxFloor: "999",
+    });
+    expect(result.filters).toEqual({});
+    expect(result.issues).toEqual([
+      { code: "invalid-number", field: "minBedrooms" },
+      { code: "invalid-number", field: "minBathrooms" },
+      { code: "invalid-number", field: "minFloor" },
+      { code: "invalid-number", field: "maxFloor" },
+    ]);
+  });
+
+  it("allows zero bedrooms (studio) and swaps an inverted floor range", () => {
+    const result = parseListingFilters({ minBedrooms: "0", minFloor: "10", maxFloor: "2" });
+    expect(result.filters).toEqual({ minBedrooms: 0, minFloor: 2, maxFloor: 10 });
+    expect(result.issues).toEqual([{ code: "swapped-floor-range" }]);
+  });
+});
+
+describe("countAdvancedFilters", () => {
+  it("counts structural filters and each amenity", () => {
+    expect(countAdvancedFilters({})).toBe(0);
+    expect(countAdvancedFilters({ citySlug: "batumi", maxPrice: 1 })).toBe(0);
+    expect(
+      countAdvancedFilters({
+        minBedrooms: 1,
+        minFloor: 2,
+        maxFloor: 5,
+        amenities: ["bed", "balcony"],
+      }),
+    ).toBe(4);
+  });
+});
+
+describe("filterListings: structure and amenities", () => {
+  it("filters by minimum bedrooms and bathrooms", () => {
+    expect(runDetailed({ minBedrooms: 2 })).toEqual(["big"]);
+    expect(runDetailed({ minBedrooms: 0 })).toEqual(["big", "studio"]);
+    expect(runDetailed({ minBathrooms: 2 })).toEqual(["big"]);
+  });
+
+  it("filters by floor range, including the boundaries", () => {
+    expect(runDetailed({ minFloor: 10, maxFloor: 21 })).toEqual(["big", "studio"]);
+    expect(runDetailed({ maxFloor: 10 })).toEqual(["big"]);
+    expect(runDetailed({ minFloor: 11 })).toEqual(["studio"]);
+  });
+
+  it("never matches unknown structural values", () => {
+    const cases: ListingFilters[] = [
+      { minBedrooms: 0 },
+      { minBathrooms: 1 },
+      { minFloor: 0 },
+      { maxFloor: 99 },
+    ];
+    for (const filters of cases) {
+      expect(runDetailed(filters)).not.toContain("unknownFacts");
+    }
+  });
+
+  it("uses AND matching across property features and listing equipment", () => {
+    expect(runDetailed({ amenities: ["balcony"] })).toEqual(["big", "studio"]);
+    expect(runDetailed({ amenities: ["balcony", "parking"] })).toEqual(["big"]);
+    expect(runDetailed({ amenities: ["refrigerator", "dishwasher"] })).toEqual(["big"]);
+    expect(runDetailed({ amenities: ["balcony", "elevator", "dishwasher"] })).toEqual(["big"]);
+  });
+
+  it("does not treat unknown amenities as matches", () => {
+    expect(runDetailed({ amenities: ["elevator"] })).toEqual(["big"]);
+    expect(runDetailed({ amenities: ["television"] })).toEqual([]);
+  });
+
+  it("combines structural, amenity, and budget filters", () => {
+    expect(runDetailed({ amenities: ["balcony"], maxPrice: 100000 })).toEqual(["studio"]);
+    expect(runDetailed({ minBedrooms: 1, amenities: ["balcony"], maxPrice: 100000 })).toEqual([]);
   });
 });

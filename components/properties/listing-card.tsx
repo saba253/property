@@ -8,8 +8,8 @@ import {
   formatDisplayPricePerSqm,
   originalPriceNote,
 } from "@/lib/pricing/format-display-price";
-import { formatArea } from "@/lib/pricing/format-money";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
+import { getCardFacts } from "@/lib/properties/property-facts";
 
 type ListingCardProps = ListingWithProperty & {
   price: DisplayPrice;
@@ -18,11 +18,7 @@ type ListingCardProps = ListingWithProperty & {
 
 export function ListingCard({ listing, property, price, href }: ListingCardProps) {
   const pricePerSqm = formatDisplayPricePerSqm(price);
-  const facts = [
-    property.rooms !== undefined ? `${property.rooms} ოთახი` : null,
-    formatArea(property.areaSqm),
-    property.floor !== undefined ? `${property.floor} სართული` : null,
-  ].filter((fact): fact is string => fact !== null);
+  const facts = getCardFacts(property);
 
   return (
     <Link href={href} className="group block rounded-card">

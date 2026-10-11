@@ -20,14 +20,28 @@ describe("getDemoListingWithProperty", () => {
 
 describe("getDemoListingIds", () => {
   it("returns every demo listing id", () => {
-    expect(getDemoListingIds()).toEqual(["demo-listing-1", "demo-listing-2"]);
+    expect(getDemoListingIds()).toEqual([
+      "demo-listing-1",
+      "demo-listing-2",
+      "demo-listing-3",
+      "demo-listing-4",
+      "demo-listing-5",
+      "demo-listing-6",
+    ]);
   });
 });
 
 describe("getActiveDemoListingsWithProperties", () => {
   it("returns every active demo listing in data order", () => {
     const ids = getActiveDemoListingsWithProperties().map((item) => item.listing.id);
-    expect(ids).toEqual(["demo-listing-1", "demo-listing-2"]);
+    expect(ids).toEqual([
+      "demo-listing-1",
+      "demo-listing-2",
+      "demo-listing-3",
+      "demo-listing-4",
+      "demo-listing-5",
+      "demo-listing-6",
+    ]);
   });
 
   it("pairs each listing with its own property", () => {

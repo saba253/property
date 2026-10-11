@@ -95,3 +95,48 @@ describe("buildListingDetailHref", () => {
     );
   });
 });
+
+describe("structure and amenity filters in URLs and chips", () => {
+  const filters: ListingFilters = {
+    minBedrooms: 2,
+    minBathrooms: 1,
+    minFloor: 3,
+    maxFloor: 12,
+    amenities: ["balcony", "dishwasher"],
+  };
+
+  it("adds them to the URL, with one amenity parameter per amenity", () => {
+    expect(buildListingsHref(filters)).toBe(
+      "/properties?minBedrooms=2&minBathrooms=1&minFloor=3&maxFloor=12&amenity=balcony&amenity=dishwasher",
+    );
+  });
+
+  it("round-trips through parseListingFilters", () => {
+    const url = new URL(buildListingsHref(filters, "GEL"), "http://x");
+    const query: Record<string, string | string[]> = {};
+    for (const key of new Set(url.searchParams.keys())) {
+      const values = url.searchParams.getAll(key);
+      query[key] = values.length > 1 ? values : values[0];
+    }
+    expect(parseListingFilters(query)).toEqual({ filters, display: "GEL", issues: [] });
+  });
+
+  it("labels them in Georgian", () => {
+    expect(getFilterChips(filters).map((chip) => chip.label)).toEqual([
+      "საძინებელი: 2+",
+      "სველი წერტილი: 1+",
+      "სართული: 3 – 12",
+      "აივანი",
+      "ჭურჭლის სარეცხი მანქანა",
+    ]);
+  });
+
+  it("removes one amenity at a time", () => {
+    const chip = getFilterChips({ amenities: ["balcony", "dishwasher"] }).find(
+      (item) => item.key === "amenity-balcony",
+    );
+    expect(chip?.removeHref).toBe("/properties?amenity=dishwasher");
+    const last = getFilterChips({ amenities: ["balcony"] })[0];
+    expect(last.removeHref).toBe("/properties");
+  });
+});

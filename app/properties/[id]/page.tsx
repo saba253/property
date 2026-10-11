@@ -12,13 +12,14 @@ import {
   DetailPriceSummaryView,
   type PricesByCurrency,
 } from "@/components/properties/detail-pricing";
+import { AmenityList } from "@/components/properties/amenity-list";
 import { type Fact, FactList } from "@/components/properties/fact-list";
 import { PropertyIllustration } from "@/components/properties/property-illustration";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getDisplayPrice } from "@/lib/pricing/display-price";
-import { formatArea } from "@/lib/pricing/format-money";
 import { getDemoListingIds, getDemoListingWithProperty } from "@/lib/properties/get-demo-listing";
+import { getStructuralFacts } from "@/lib/properties/property-facts";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -63,13 +64,10 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     GEL: getDisplayPrice(listing.askingPrice, property.areaSqm, "GEL", rateState),
   };
 
-  // Optional facts are shown only when the listing states them; nothing is invented to fill gaps.
+  // Unknown facts are shown as "not specified"; nothing is invented to fill gaps.
+  // City and district are shown under the title.
   const facts: Fact[] = [
-    { label: "ქალაქი", value: property.city },
-    { label: "უბანი", value: property.district },
-    { label: "ფართი", value: formatArea(property.areaSqm) },
-    ...(property.rooms !== undefined ? [{ label: "ოთახები", value: String(property.rooms) }] : []),
-    ...(property.floor !== undefined ? [{ label: "სართული", value: String(property.floor) }] : []),
+    ...getStructuralFacts(property),
     { label: "ორიგინალი ვალუტა", value: currency },
   ];
 
@@ -107,6 +105,19 @@ export default async function PropertyDetailPage({ params }: PageProps) {
             </h2>
             <div className="mt-4">
               <FactList facts={facts} />
+            </div>
+          </section>
+
+          <section aria-labelledby="amenities-heading" className="mt-10">
+            <h2 id="amenities-heading" className="text-xl font-semibold text-navy">
+              კეთილმოწყობა
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              „არ არის მითითებული“ ნიშნავს, რომ ინფორმაცია უცნობია, და არა იმას, რომ ნივთი ან
+              მახასიათებელი არ არსებობს.
+            </p>
+            <div className="mt-4">
+              <AmenityList item={data} />
             </div>
           </section>
 

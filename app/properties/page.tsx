@@ -20,11 +20,13 @@ import {
 } from "@/lib/properties/filter-chips";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 import {
+  type CountFilterKey,
   type FilterIssue,
   type NumericFilterKey,
   type ParsedListingFilters,
   type RawQuery,
   convertBudgetForDisplay,
+  countAdvancedFilters,
   filterListings,
   hasActiveFilters,
   parseListingFilters,
@@ -38,11 +40,15 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const NUMERIC_FIELD_LABELS: Record<NumericFilterKey, string> = {
+const NUMERIC_FIELD_LABELS: Record<NumericFilterKey | CountFilterKey, string> = {
   minPrice: "მინიმალური ბიუჯეტი",
   maxPrice: "მაქსიმალური ბიუჯეტი",
   minArea: "მინიმალური ფართი",
   maxArea: "მაქსიმალური ფართი",
+  minBedrooms: "საძინებლების რაოდენობა",
+  minBathrooms: "სველი წერტილების რაოდენობა",
+  minFloor: "მინიმალური სართული",
+  maxFloor: "მაქსიმალური სართული",
 };
 
 function issueMessage(issue: FilterIssue): string {
@@ -59,6 +65,10 @@ function issueMessage(issue: FilterIssue): string {
       return "მინიმალური ბიუჯეტი მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
     case "swapped-area-range":
       return "მინიმალური ფართი მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
+    case "swapped-floor-range":
+      return "მინიმალური სართული მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
+    case "invalid-amenity":
+      return "ზოგიერთი მითითებული კეთილმოწყობა უცნობია და არ გამოიყენება.";
   }
 }
 
@@ -70,6 +80,8 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
     const value = filters[key] ?? fallback;
     return value === null ? "" : String(value);
   };
+  const count = (key: CountFilterKey): string =>
+    filters[key] === undefined ? "" : String(filters[key]);
 
   return {
     city: filters.citySlug ?? "",
@@ -78,6 +90,11 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
     maxPrice: numeric("maxPrice"),
     minArea: numeric("minArea"),
     maxArea: numeric("maxArea"),
+    minBedrooms: count("minBedrooms"),
+    minBathrooms: count("minBathrooms"),
+    minFloor: count("minFloor"),
+    maxFloor: count("maxFloor"),
+    amenities: filters.amenities ?? [],
   };
 }
 
@@ -116,6 +133,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         cities={cities}
         values={values}
         display={display}
+        advancedCount={countAdvancedFilters(filters)}
         showReset={filtersActive || parsed.issues.length > 0}
         resetHref={buildListingsHref({}, display)}
       />
