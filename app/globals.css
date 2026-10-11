@@ -1,18 +1,59 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Original palette: primary navy, a sparing interactive blue, warm cream for
+ * selected sections, and a restrained sand accent for decoration only. Pages are white.
+ * Amber (Tailwind's amber-*) is reserved for demo labels and warnings.
+ */
+@theme {
+  /* Primary navy: buttons, navigation, headings. */
+  --color-navy: #172b46;
+  --color-navy-900: #0f1e33;
+  --color-navy-700: #2a4266;
+
+  /* Interactive blue: links, focus, the price-per-m² highlight. Use sparingly.
+     accent-500 is for icons, fills and large text; accent-700 passes contrast for small text. */
+  --color-accent-50: #eef4fc;
+  --color-accent-100: #d9e6f8;
+  --color-accent-500: #3478d4;
+  --color-accent-700: #2a63b3;
+
+  /* Warm cream: selected section backgrounds. */
+  --color-cream: #f7f4ee;
+
+  /* Sand: subtle decorative accents only (lines, icon details). sand-700 is for rare small text. */
+  --color-sand-100: #f2e9de;
+  --color-sand-200: #e5d2bd;
+  --color-sand-500: #b98458;
+  --color-sand-700: #8a5e3b;
+
+  /* Neutrals. */
+  --color-surface: #ffffff;
+  --color-ink: #1c2330;
+  --color-muted: #5b6474;
+  --color-subtle: #868e9b;
+  --color-line: #e6e2db;
+  --color-line-strong: #cdc6bb;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(23 43 70 / 0.05), 0 6px 20px rgb(23 43 70 / 0.07);
+  --shadow-card-hover: 0 2px 4px rgb(23 43 70 / 0.07), 0 14px 32px rgb(23 43 70 / 0.12);
+
+  --font-sans: var(--font-noto-sans-georgian), "Sylfaen", system-ui, sans-serif;
+}
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
   color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-noto-sans-georgian), "Sylfaen", system-ui, sans-serif;
+/* One consistent, visible focus style for keyboard users. */
+:where(a, button, input, select, summary):focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
 }

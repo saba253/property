@@ -1,41 +1,45 @@
 import Link from "next/link";
-import { formatArea, formatMoney, formatPricePerSqm } from "@/lib/pricing/format-money";
+import { DemoBadge } from "@/components/properties/demo-label";
+import { PricePerSqmChip } from "@/components/properties/price-per-sqm";
+import { PropertyIllustration } from "@/components/properties/property-illustration";
+import { formatArea, formatMoney } from "@/lib/pricing/format-money";
 import { calculateAskingPricePerSqm } from "@/lib/pricing/price-per-sqm";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 
 export function ListingCard({ listing, property }: ListingWithProperty) {
   const { amount, currency } = listing.askingPrice;
   const pricePerSqm = calculateAskingPricePerSqm(amount, property.areaSqm);
+  const facts = [
+    property.rooms !== undefined ? `${property.rooms} ოთახი` : null,
+    formatArea(property.areaSqm),
+    property.floor !== undefined ? `${property.floor} სართული` : null,
+  ].filter((fact): fact is string => fact !== null);
 
   return (
-    <Link
-      href={`/properties/${listing.id}`}
-      className="block h-full rounded-2xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-    >
-      <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
-        დემო
-      </span>
+    <Link href={`/properties/${listing.id}`} className="group block rounded-card">
+      <div className="relative">
+        <PropertyIllustration
+          seed={listing.id}
+          className="aspect-[4/3] rounded-card shadow-card transition-shadow group-hover:shadow-card-hover"
+        />
+        <DemoBadge className="absolute top-3 left-3" />
+      </div>
 
-      <h2 className="mt-4 text-lg font-semibold">{listing.title}</h2>
+      <div className="mt-3 px-1">
+        <h2 className="text-base font-semibold text-navy group-hover:underline">{listing.title}</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          {property.city}, {property.district}
+        </p>
+        <p className="mt-0.5 text-sm text-muted">{facts.join(" · ")}</p>
 
-      <p className="mt-1 text-sm text-slate-600">
-        {property.city}, {property.district}
-      </p>
-
-      <dl className="mt-4 space-y-1 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-slate-500">მითითებული ფასი</dt>
-          <dd className="font-semibold">{formatMoney(amount, currency)}</dd>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-lg font-bold text-ink">
+            {formatMoney(amount, currency)}
+            <span className="sr-only">, მითითებული ფასი, ვალუტა {currency}</span>
+          </p>
+          <PricePerSqmChip pricePerSqm={pricePerSqm} currency={currency} />
         </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-slate-500">ფართი</dt>
-          <dd className="font-semibold">{formatArea(property.areaSqm)}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-slate-500">ფასი მ²-ზე</dt>
-          <dd className="font-semibold">{formatPricePerSqm(pricePerSqm, currency)}</dd>
-        </div>
-      </dl>
+      </div>
     </Link>
   );
 }

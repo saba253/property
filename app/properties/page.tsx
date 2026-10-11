@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { DemoNotice } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import {
   ListingFiltersForm,
   type ListingFilterFormValues,
 } from "@/components/properties/listing-filters-form";
+import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getCitiesPresentIn } from "@/lib/properties/cities";
+import { getFilterChips } from "@/lib/properties/filter-chips";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 import {
   type FilterIssue,
@@ -78,27 +81,57 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   const items = filterListings(allItems, parsed.filters);
   const cities = getCitiesPresentIn(allItems.map((item) => item.property.city));
   const values = toFormValues(query, parsed);
+  const filtersActive = hasActiveFilters(parsed.filters);
+  const chips = getFilterChips(parsed.filters);
 
   return (
     <>
       {/* The key remounts the form so its fields always match the current URL. */}
-      <ListingFiltersForm key={JSON.stringify(values)} cities={cities} values={values} />
+      <ListingFiltersForm
+        key={JSON.stringify(values)}
+        cities={cities}
+        values={values}
+        showReset={filtersActive || parsed.issues.length > 0}
+      />
 
       {parsed.issues.length > 0 && (
-        <ul className="mt-4 space-y-1 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+        <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
           {parsed.issues.map((issue, index) => (
             <li key={index}>{issueMessage(issue)}</li>
           ))}
         </ul>
       )}
 
-      <p role="status" className="mt-6 text-sm font-medium text-slate-700">
-        ნაპოვნია {items.length} განცხადება
-        {hasActiveFilters(parsed.filters) ? ` (სულ ${allItems.length})` : ""}
-      </p>
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p role="status" className="text-base font-semibold text-ink">
+          ნაპოვნია {items.length} განცხადება
+          {filtersActive ? (
+            <span className="font-normal text-muted"> (სულ {allItems.length})</span>
+          ) : null}
+        </p>
+
+        {chips.length > 0 && (
+          <ul aria-label="არჩეული ფილტრები" className="flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <li key={chip.key}>
+                <Link
+                  href={chip.removeHref}
+                  aria-label={`${chip.label} — ფილტრის მოხსნა`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface py-1.5 pr-2.5 pl-3 text-sm text-ink transition-colors hover:border-ink"
+                >
+                  {chip.label}
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-muted">
+                    <path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" />
+                  </svg>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {items.length > 0 ? (
-        <ul className="mt-4 grid gap-4 sm:grid-cols-2">
+        <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
             <li key={item.listing.id}>
               <ListingCard {...item} />
@@ -106,15 +139,30 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           ))}
         </ul>
       ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <h2 className="text-lg font-semibold">ამ ფილტრებით განცხადება ვერ მოიძებნა</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+        <div className="mt-5 rounded-card border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
+          <svg viewBox="0 0 48 48" aria-hidden="true" className="mx-auto h-12 w-12">
+            <circle
+              cx="21"
+              cy="21"
+              r="13"
+              fill="none"
+              strokeWidth="4"
+              className="stroke-sand-200"
+            />
+            <path
+              d="m31 31 9 9"
+              strokeWidth="4"
+              strokeLinecap="round"
+              className="stroke-sand-500"
+            />
+          </svg>
+          <h2 className="mt-4 text-lg font-semibold text-navy">
+            ამ ფილტრებით განცხადება ვერ მოიძებნა
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
             სცადეთ ფასის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
           </p>
-          <Link
-            href="/properties"
-            className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-6 text-base font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-          >
+          <Link href="/properties" className={`${buttonPrimary} mt-6`}>
             ფილტრების გასუფთავება
           </Link>
         </div>
@@ -123,35 +171,56 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   );
 }
 
+function ListingsSkeleton() {
+  return (
+    <div aria-busy="true">
+      <p className="sr-only">განცხადებები იტვირთება…</p>
+      <div className="h-40 animate-pulse rounded-card bg-line/60 lg:h-28" />
+      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="aspect-[4/3] animate-pulse rounded-card bg-line/60" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DemoListingsPage({ searchParams }: PageProps<"/properties">) {
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
-        ← მთავარ გვერდზე დაბრუნება
-      </Link>
+    <main className="flex-1">
+      <section className="border-b border-line bg-cream">
+        <div className={`${pageContainer} py-8 sm:py-12`}>
+          <div className="max-w-3xl">
+            <h1 className="text-3xl font-bold tracking-tight text-navy sm:text-4xl">
+              დემო განცხადებები
+            </h1>
+            <p className="mt-2 text-base leading-7 text-muted">
+              შეადარეთ განცხადებებში მითითებული ფასები და ფასი კვადრატულ მეტრზე. ფასები ნაჩვენებია
+              განცხადების ვალუტაში და არ კონვერტირდება.
+            </p>
+          </div>
 
-      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        <strong className="font-semibold">დემო განცხადებები.</strong> მონაცემები გამოგონილია და არ
-        წარმოადგენს რეალურ ქონებას ან რეალურ განცხადებებს.
-      </div>
+          <div className="mt-6">
+            <DemoNotice title="დემო განცხადებები.">
+              მონაცემები და ილუსტრაციები გამოგონილია და არ წარმოადგენს რეალურ ქონებას ან რეალურ
+              განცხადებებს.
+            </DemoNotice>
+          </div>
+        </div>
+      </section>
 
-      <h1 className="mt-8 text-2xl font-bold tracking-tight sm:text-4xl">დემო განცხადებები</h1>
-
-      <p className="mt-2 text-slate-600">
-        ფასები ნაჩვენებია განცხადების ვალუტაში და არ კონვერტირდება.
-      </p>
-
-      <div className="mt-8">
+      <div className={`${pageContainer} py-8 sm:py-10`}>
         {/* Filters depend on the URL query, so they render at request time inside Suspense. */}
-        <Suspense fallback={<p className="text-sm text-slate-500">ფილტრები იტვირთება…</p>}>
+        {/* A map view can be added beside the results in a later step. */}
+        <Suspense fallback={<ListingsSkeleton />}>
           <FilteredListings searchParams={searchParams} />
         </Suspense>
-      </div>
 
-      <p className="mt-6 text-sm leading-6 text-slate-600">
-        ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის მიხედვით. ეს არ
-        არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან ღირებულებას.
-      </p>
+        <p className="mt-12 max-w-3xl border-t border-line pt-6 text-sm leading-6 text-muted">
+          ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის მიხედვით. ეს არ
+          არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან ღირებულებას.
+        </p>
+      </div>
     </main>
   );
 }

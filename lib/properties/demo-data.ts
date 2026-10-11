@@ -8,6 +8,8 @@ export const demoProperties: readonly Property[] = [
     city: "თბილისი",
     district: "ვაკე",
     areaSqm: 65,
+    rooms: 3,
+    floor: 5,
     dataSource: "demo",
   },
   {
@@ -15,6 +17,8 @@ export const demoProperties: readonly Property[] = [
     city: "ბათუმი",
     district: "ძველი ბათუმი",
     areaSqm: 48.5,
+    rooms: 2,
+    floor: 8,
     dataSource: "demo",
   },
 ];

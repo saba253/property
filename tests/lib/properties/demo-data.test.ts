@@ -35,6 +35,16 @@ describe("demo data", () => {
     }
   });
 
+  it("uses positive whole numbers for optional rooms and floor when present", () => {
+    for (const property of demoProperties) {
+      for (const value of [property.rooms, property.floor]) {
+        if (value !== undefined) {
+          expect(Number.isInteger(value) && value > 0).toBe(true);
+        }
+      }
+    }
+  });
+
   it("covers both USD and GEL", () => {
     const currencies = [...new Set(demoListings.map((listing) => listing.askingPrice.currency))];
     expect(currencies.sort()).toEqual(["GEL", "USD"]);

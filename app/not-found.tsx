@@ -1,18 +1,24 @@
 import Link from "next/link";
+import { buttonPrimary, buttonSecondary, pageContainer } from "@/components/ui/styles";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-start justify-center px-4 py-16 sm:px-6">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">გვერდი ვერ მოიძებნა</h1>
+    <main className={`${pageContainer} flex flex-1 flex-col items-start justify-center py-16`}>
+      <p className="text-sm font-semibold text-sand-700">404</p>
+      <h1 className="mt-2 text-2xl font-bold tracking-tight text-navy sm:text-4xl">
+        გვერდი ვერ მოიძებნა
+      </h1>
 
-      <p className="mt-4 text-slate-600">მოთხოვნილი გვერდი არ არსებობს ან გადატანილია.</p>
+      <p className="mt-4 text-muted">მოთხოვნილი გვერდი არ არსებობს ან გადატანილია.</p>
 
-      <Link
-        href="/"
-        className="mt-8 inline-flex h-12 items-center justify-center rounded-full bg-slate-900 px-6 text-base font-medium text-white transition-colors hover:bg-slate-700"
-      >
-        მთავარ გვერდზე დაბრუნება
-      </Link>
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <Link href="/" className={buttonPrimary}>
+          მთავარ გვერდზე დაბრუნება
+        </Link>
+        <Link href="/properties" className={buttonSecondary}>
+          დემო განცხადებები
+        </Link>
+      </div>
     </main>
   );
 }

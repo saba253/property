@@ -15,6 +15,10 @@ export type Property = {
   city: string;
   district: string;
   areaSqm: number;
+  /** Number of rooms. Optional: future listings may not state it. */
+  rooms?: number;
+  /** Floor the apartment is on. Optional: future listings may not state it. */
+  floor?: number;
   dataSource: DataSource;
 };
 
