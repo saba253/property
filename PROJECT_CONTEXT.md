@@ -33,6 +33,14 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 - Add dependencies only when needed.
 - Do not implement scraping or real-data ingestion without a separate review.
 
+## Folder conventions
+
+- `app/` holds routes and pages only (the project has no `src/` folder).
+- `lib/` holds business logic, split by topic (for example `lib/pricing/`). Files in `lib/` must be plain TypeScript: no React, no imports from `app/` or `components/`.
+- `components/` will hold UI components when the first one exists. Components may import from `lib/`, never the reverse.
+- `tests/` mirrors `lib/` (for example `tests/lib/pricing/` tests `lib/pricing/`).
+- The `@/` import alias points to the project root, in both `tsconfig.json` and `vitest.config.ts`. Example: `@/lib/pricing/price-per-sqm`.
+
 ## Workflow
 
 - Work in small, verifiable steps.
@@ -46,10 +54,10 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
-- Last completed step: Step 1.2 — Development tooling (Prettier, Vitest, npm scripts, GitHub Actions workflow).
-- What works: Next.js app created. Passing locally and in GitHub Actions CI: `npm run lint`, `npm run typecheck`, `npm test` (one smoke test), `npm run build`. Also available: `npm run format`, `npm run format:check`, `npm run test:watch`.
-- Tooling files: `.prettierrc.json`, `.prettierignore`, `vitest.config.ts`, `tests/smoke.test.ts`, `.github/workflows/ci.yml`.
-- Notes: `typecheck` runs `next typegen` first, because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout.
-- Known issues: Tests are placeholders only. Vitest is configured for the Node environment (no component testing yet). Vitest does not yet know the `@/` import alias; add it when the first test needs it.
+- Last completed step: Step 1.3 — Project structure and conventions.
+- What works: Passing locally: `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, `npm run build`. GitHub Actions CI runs lint, typecheck, tests, and build.
+- Business logic so far: `lib/pricing/price-per-sqm.ts` (`calculateAskingPricePerSqm`, a pure helper for asking price per square metre, currency-neutral), tested in `tests/lib/pricing/price-per-sqm.test.ts`.
+- Notes: `typecheck` runs `next typegen` first because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout. The Vitest `@/` alias is configured and matches `tsconfig.json`.
+- Known issues: Vitest runs in the Node environment only (no component testing yet). `tests/smoke.test.ts` is a placeholder and can be removed later. CI for the Step 1.3 commit has not yet been confirmed.
 - Environment variables: None configured yet.
-- Next step: Step 1.3 — to be planned.
+- Next step: Step 1.4 — to be planned.
