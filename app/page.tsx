@@ -19,13 +19,6 @@ const features = [
     description:
       "შეადარეთ განცხადებაში მითითებული ფასი, მსგავსი აქტიური განცხადებების ფასებს. ეს არის ორიენტირებული და არა დადასტურებული გარიგების ფასი ან საბოლოო სამართლიანი ღირებულება.",
   },
-  {
-    id: "calculators",
-    icon: "M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 3v3h10V6H7Zm0 6v2h2v-2H7Zm4 0v2h2v-2h-2Zm4 0v2h2v-2h-2Zm-8 4v2h2v-2H7Zm4 0v2h2v-2h-2Zm4 0v2h2v-2h-2Z",
-    title: "ფინანსური კალკულატორები",
-    description:
-      "შეაფასეთ ძირითადი მაჩვენებლები, მაგალითად ფასი კვადრატულ მეტრზე, USD და GEL ვალუტებისთვის.",
-  },
 ];
 
 const principles = [
@@ -97,7 +90,7 @@ export default function Home() {
             ქვემოთ ჩამოთვლილი შესაძლებლობები ჯერ შემუშავების პროცესშია და ამჟამად არ მუშაობს.
           </p>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
             {features.map((feature) => (
               <article key={feature.id} className="flex flex-col rounded-card bg-cream p-6">
                 <div className="flex items-center justify-between">
@@ -126,7 +119,7 @@ export default function Home() {
             გამჭვირვალობა მონაცემებთან მიმართებით
           </h2>
 
-          <ul className="mt-8 grid max-w-4xl gap-4 sm:grid-cols-3">
+          <ul className="mt-10 grid gap-6 lg:grid-cols-3">
             {principles.map((principle) => (
               <li
                 key={principle}
