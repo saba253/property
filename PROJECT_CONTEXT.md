@@ -40,6 +40,7 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 - `components/` will hold UI components when the first one exists. Components may import from `lib/`, never the reverse.
 - `tests/` mirrors `lib/` (for example `tests/lib/pricing/` tests `lib/pricing/`).
 - The `@/` import alias points to the project root, in both `tsconfig.json` and `vitest.config.ts`. Example: `@/lib/pricing/price-per-sqm`.
+- `lib/properties/` holds the data model (`Property` is the physical thing, `Listing` is an offer for it) and demo data. Prices and areas are never converted between currencies.
 
 ## Workflow
 
@@ -52,12 +53,17 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
-- Last completed step: Step 1.4 - First homepage UI (Georgian-first landing page).
-- What works: Passing locally: `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, `npm run build`. GitHub Actions CI runs lint, typecheck, tests, and build.
-- Homepage: `app/page.tsx` is a static landing page in Georgian with a temporary text logo, an "under development" banner, and three "coming soon" feature cards (search, asking-price comparison, calculators). It shows no listings, no statistics, and no language switcher. Text needs a native Georgian speaker review before launch.
-- Fonts and theme: `app/layout.tsx` uses Noto Sans Georgian (`next/font/google`) and `<html lang="ka">`. The theme is light only; dark mode was removed for now.
-- Business logic so far: `lib/pricing/price-per-sqm.ts` (`calculateAskingPricePerSqm`), tested in `tests/lib/pricing/price-per-sqm.test.ts`.
-- Notes: `typecheck` runs `next typegen` first because Next.js generates types such as `LayoutProps` into `.next`, which does not exist on a fresh checkout. The Vitest `@/` alias matches `tsconfig.json`.
-- Known issues: Vitest runs in the Node environment only (no component testing yet). `tests/smoke.test.ts` is a placeholder. `public/next.svg` and `public/vercel.svg` are unused starter files. The temporary logo name is not final. English localization is not implemented yet.
+## Current state
+
+## Current state
+
+- Last completed step: Step 1.5 - Demo property detail page.
+- What works: Passing locally: lint, typecheck, formatting, 25 tests, build, and browser checks. GitHub Actions CI was confirmed green for Steps 1.3 and 1.4. Step 1.5 CI is not yet confirmed.
+- Demo detail page: `/properties/[id]` shows a clearly labeled demo listing with title, location, asking price, area, currency, and automatically calculated asking price per square metre. Demo pages are marked noindex and are not linked from the homepage. Unknown listing ids display the Georgian 404 page.
+- Data model: `lib/properties/types.ts` defines Property, Listing, Money, and Currency. `lib/properties/demo-data.ts` contains two invented examples, one USD and one GEL.
+- Pricing: `lib/pricing/price-per-sqm.ts` calculates asking price per square metre. `lib/pricing/format-money.ts` formats prices and areas without currency conversion.
+- Homepage: Georgian-first landing page from Step 1.4.
+- Technical notes: The Vitest `@/` alias matches `tsconfig.json`. `typecheck` runs Next.js type generation first. The `dynamicParams` route configuration was removed because it is incompatible with the enabled `cacheComponents` setting.
+- Known issues: Vitest uses the Node environment only. The original smoke test and starter SVG files remain. English localization is not implemented. There is no listings index page yet. OneDrive may interfere with the `.next` build cache on Windows.
 - Environment variables: None configured yet.
-- Next step: Step 1.5 - to be planned.
+- Next step: Step 1.6 - to be planned.
