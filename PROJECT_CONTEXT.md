@@ -37,7 +37,7 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 - `app/` holds routes and pages only (the project has no `src/` folder).
 - `lib/` holds business logic, split by topic (for example `lib/pricing/`). Files in `lib/` must be plain TypeScript: no React, no imports from `app/` or `components/`.
-- `components/` will hold UI components when the first one exists. Components may import from `lib/`, never the reverse.
+- `components/` holds UI components, split by topic (for example `components/properties/`). Components may import from `lib/`, never the reverse.
 - `tests/` mirrors `lib/` (for example `tests/lib/pricing/` tests `lib/pricing/`).
 - The `@/` import alias points to the project root, in both `tsconfig.json` and `vitest.config.ts`. Example: `@/lib/pricing/price-per-sqm`.
 - `lib/properties/` holds the data model (`Property` is the physical thing, `Listing` is an offer for it) and demo data. Prices and areas are never converted between currencies.
@@ -53,14 +53,15 @@ Build a Georgian real estate decision-support platform. Help users compare prope
 
 ## Current state
 
-- Last completed step: Step 1.6 - Demo listings index page.
-- What works: Passing locally: lint, typecheck, formatting, 28 tests, build, and browser checks. GitHub Actions CI was confirmed green for Steps 1.3 and 1.4. CI for Steps 1.5 and 1.6 is not yet confirmed.
+- Last completed step: Step 1.7 - Listing search and filters.
+- What works: Passing locally: lint, typecheck, formatting, 54 tests, build, and browser checks. GitHub Actions CI was confirmed green for Steps 1.3 and 1.4. CI for Step 1.7 is not yet confirmed.
 - Demo detail page: `/properties/[id]` shows a clearly labeled demo listing with title, location, asking price, area, currency, and automatically calculated asking price per square metre. It links back to the demo listings index. Unknown listing ids display the Georgian 404 page.
-- Demo listings index: `/properties` lists every active demo listing as a card (title, location, asking price, area, asking price per square metre) linking to its detail page, with a demo warning banner. Data comes from `getActiveDemoListingsWithProperties()` in `lib/properties/get-demo-listing.ts`. All demo pages are marked noindex and are not linked from the homepage yet.
+- Demo listings index: `/properties` lists every active demo listing as a card (title, location, asking price, area, asking price per square metre) linking to its detail page, with a demo warning banner. Data comes from `getActiveDemoListingsWithProperties()` in `lib/properties/get-demo-listing.ts`. Cards are `components/properties/listing-card.tsx`. All demo pages are marked noindex and are not linked from the homepage yet.
+- Filters: `/properties` filters by city, currency, asking price range, and area range via shareable URL query parameters (`city=tbilisi|batumi`, `currency=USD|GEL`, `minPrice`, `maxPrice`, `minArea`, `maxArea`). The form (`components/properties/listing-filters-form.tsx`) uses `next/form` (GET, works without JavaScript) and shows the match count, a reset control, validation notices, and a Georgian empty state. Pure logic is in `lib/properties/listing-filters.ts` (`parseListingFilters`, `filterListings`) and `lib/properties/cities.ts` (city slugs to Georgian names). Invalid values are dropped with a notice, inverted min/max ranges are swapped, and price limits are ignored unless a currency is chosen, so USD and GEL are never compared. Inactive listings are always excluded. Results render inside `<Suspense>` because `searchParams` is request-time data under `cacheComponents`.
 - Data model: `lib/properties/types.ts` defines Property, Listing, Money, and Currency. `lib/properties/demo-data.ts` contains two invented examples, one USD and one GEL.
 - Pricing: `lib/pricing/price-per-sqm.ts` calculates asking price per square metre. `lib/pricing/format-money.ts` formats prices and areas without currency conversion.
 - Homepage: Georgian-first landing page from Step 1.4.
 - Technical notes: The Vitest `@/` alias matches `tsconfig.json`. `typecheck` runs Next.js type generation first. The `dynamicParams` route configuration was removed because it is incompatible with the enabled `cacheComponents` setting.
-- Known issues: Vitest uses the Node environment only. The original smoke test and starter SVG files remain. English localization is not implemented. OneDrive may interfere with the `.next` build cache on Windows.
+- Known issues: Unknown listing ids such as `/properties/nope` render the Georgian 404 page but return HTTP 200. Cause: with `partialPrefetching`, Next.js 16.3+ immediately streams the route's App Shell for params not returned by `generateStaticParams`, which commits status 200 before `notFound()` runs (Next.js then adds a noindex tag). Proposed fix, not yet applied: `export const ensureStatic = "navigation";` in `app/properties/[id]/page.tsx`, which makes unknown ids wait for the full render; tested in a scratch build and it returned 404. Filter forms submit empty fields as empty query parameters (harmless). Vitest uses the Node environment only. The original smoke test and starter SVG files remain. English localization is not implemented. OneDrive may interfere with the `.next` build cache on Windows.
 - Environment variables: None configured yet.
-- Next step: Step 1.7 - to be planned.
+- Next step: Decide on the 404 status fix, then Step 1.8 - to be planned.
