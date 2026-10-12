@@ -189,3 +189,20 @@ describe("transaction and property type in URLs and chips", () => {
     expect(getFilterChips({ maxPrice: 100000 })[0].label).toBe("ბიუჯეტი: $100,000-მდე");
   });
 });
+
+describe("rooms and district in URLs and chips", () => {
+  it("adds them to the URL and labels them in Georgian", () => {
+    const filters: ListingFilters = { district: "ვაკე", rooms: 5 };
+    const href = buildListingsHref(filters);
+    expect(new URL(href, "http://x").searchParams.get("district")).toBe("ვაკე");
+    expect(href).toContain("rooms=5");
+    expect(getFilterChips(filters).map((chip) => chip.label)).toEqual(["უბანი: ვაკე", "ოთახი: 5+"]);
+    expect(getFilterChips({ rooms: 2 })[0].label).toBe("ოთახი: 2");
+  });
+
+  it("round-trips through parseListingFilters", () => {
+    const filters: ListingFilters = { citySlug: "tbilisi", district: "ვაკე", rooms: 3 };
+    const query = Object.fromEntries(new URL(buildListingsHref(filters), "http://x").searchParams);
+    expect(parseListingFilters(query)).toEqual({ filters, display: "USD", issues: [] });
+  });
+});

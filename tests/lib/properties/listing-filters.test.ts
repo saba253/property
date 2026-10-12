@@ -582,3 +582,53 @@ describe("switchTransaction", () => {
     expect(switchTransaction(filters, "sale")).toBe(filters);
   });
 });
+
+describe("rooms and district filters", () => {
+  const roomy = [
+    item("one", "თბილისი", 30, 50000, "USD", "active", {
+      property: { rooms: 1, district: "ვაკე" },
+    }),
+    item("two", "თბილისი", 50, 80000, "USD", "active", {
+      property: { rooms: 2, district: "ვაკე" },
+    }),
+    item("five", "ბათუმი", 120, 200000, "USD", "active", { property: { rooms: 5 } }),
+    item("six", "ბათუმი", 150, 250000, "USD", "active", { property: { rooms: 6 } }),
+    item("unknown", "თბილისი", 40, 60000, "USD"),
+  ];
+  const run = (filters: ListingFilters) => ids(filterListings(roomy, filters, "USD", rate));
+
+  it("parses rooms 1-5 and rejects other values", () => {
+    expect(parseListingFilters({ rooms: "2" }).filters).toEqual({ rooms: 2 });
+    expect(parseListingFilters({ rooms: "5" }).filters).toEqual({ rooms: 5 });
+    for (const value of ["0", "6", "2.5", "two"]) {
+      expect(parseListingFilters({ rooms: value }).issues).toEqual([
+        { code: "invalid-number", field: "rooms" },
+      ]);
+    }
+  });
+
+  it("matches rooms exactly for 1-4 and five-or-more for 5", () => {
+    expect(run({ rooms: 2 })).toEqual(["two"]);
+    expect(run({ rooms: 5 })).toEqual(["five", "six"]);
+  });
+
+  it("never matches an unknown room count", () => {
+    expect(run({ rooms: 1 })).not.toContain("unknown");
+  });
+
+  it("validates districts against the known list from the data", () => {
+    expect(parseListingFilters({ district: "ვაკე" }, { knownDistricts: ["ვაკე"] }).filters).toEqual(
+      {
+        district: "ვაკე",
+      },
+    );
+    const unknown = parseListingFilters({ district: "მთაწმინდა" }, { knownDistricts: ["ვაკე"] });
+    expect(unknown.filters).toEqual({});
+    expect(unknown.issues).toEqual([{ code: "invalid-district" }]);
+  });
+
+  it("filters by district and counts rooms and district as advanced filters", () => {
+    expect(run({ district: "ვაკე" })).toEqual(["one", "two"]);
+    expect(countAdvancedFilters({ rooms: 2, district: "ვაკე" })).toBe(2);
+  });
+});

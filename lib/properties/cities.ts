@@ -18,3 +18,25 @@ export function getCitiesPresentIn(cityNames: readonly string[]): City[] {
   const present = new Set(cityNames);
   return knownCities.filter((city) => present.has(city.name));
 }
+
+/** A district as it appears in the listing data, with its city's Georgian name. */
+export type DistrictOption = { name: string; city: string };
+
+/**
+ * Districts present in the given properties, in first-seen order, without duplicates. Districts
+ * come only from listing data; there is no hardcoded district directory.
+ */
+export function getDistrictsPresentIn(
+  places: readonly { city: string; district: string }[],
+): DistrictOption[] {
+  const seen = new Set<string>();
+  const result: DistrictOption[] = [];
+  for (const { city, district } of places) {
+    const key = `${city}\u0000${district}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push({ name: district, city });
+    }
+  }
+  return result;
+}

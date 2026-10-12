@@ -7,8 +7,12 @@ import {
   type AmenityGroup,
   amenityAppliesTo,
 } from "@/lib/properties/amenities";
-import type { City } from "@/lib/properties/cities";
-import type { CountFilterKey, NumericFilterKey } from "@/lib/properties/listing-filters";
+import type { City, DistrictOption } from "@/lib/properties/cities";
+import {
+  type CountFilterKey,
+  MAX_ROOMS_FILTER,
+  type NumericFilterKey,
+} from "@/lib/properties/listing-filters";
 import {
   PROPERTY_TYPES,
   PROPERTY_TYPE_ORDER,
@@ -20,12 +24,16 @@ import type { Currency, PropertyType, TransactionType } from "@/lib/properties/t
 export type ListingFilterFormValues = {
   propertyType: string;
   city: string;
+  district: string;
+  rooms: string;
   currency: string;
   amenities: readonly string[];
 } & Record<NumericFilterKey | CountFilterKey, string>;
 
 type ListingFiltersFormProps = {
   cities: readonly City[];
+  /** Districts present in the listing data (for the district select). */
+  districts: readonly DistrictOption[];
   values: ListingFilterFormValues;
   /** Currency of the budget fields; kept on submit through a hidden field. */
   display: Currency;
@@ -182,6 +190,7 @@ function AmenityFieldset({
 
 export function ListingFiltersForm({
   cities,
+  districts,
   values,
   display,
   transaction,
@@ -306,6 +315,42 @@ export function ListingFiltersForm({
 
         <div className="mt-4 space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="col-span-2">
+              <label htmlFor="filter-district" className={fieldLabel}>
+                უბანი
+              </label>
+              <select
+                id="filter-district"
+                name="district"
+                defaultValue={values.district}
+                className={fieldInput}
+              >
+                <option value="">ნებისმიერი</option>
+                {districts.map((district) => (
+                  <option key={`${district.city}-${district.name}`} value={district.name}>
+                    {district.name} ({district.city})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-2 lg:col-span-1">
+              <label htmlFor="filter-rooms" className={fieldLabel}>
+                ოთახები
+              </label>
+              <select
+                id="filter-rooms"
+                name="rooms"
+                defaultValue={values.rooms}
+                className={fieldInput}
+              >
+                <option value="">ნებისმიერი</option>
+                {Array.from({ length: MAX_ROOMS_FILTER }, (_, index) => index + 1).map((rooms) => (
+                  <option key={rooms} value={rooms}>
+                    {rooms === MAX_ROOMS_FILTER ? `${rooms}+` : rooms}
+                  </option>
+                ))}
+              </select>
+            </div>
             <MinimumSelect
               name="minBedrooms"
               label="საძინებელი (მინ.)"
@@ -354,10 +399,10 @@ export function ListingFiltersForm({
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1 text-xs leading-5 text-muted">
           <p id="filter-price-hint">
-            {isRent ? "თვიური ქირის ბიუჯეტი" : "ბიუჯეტი"} მითითებულია {display}-ში. სხვა ვალუტაში
-            განთავსებული განცხადებები ეროვნული ბანკის ოფიციალური კურსით სავარაუდოდ შედარდება.
+            {isRent ? "თვიური ქირა" : "ბიუჯეტი"} {display}-ში · სხვა ვალუტის განცხადებები NBG-ის
+            კურსით შედარდება.
           </p>
-          <p id="filter-currency-hint">
+          <p id="filter-currency-hint" className="sr-only">
             „ორიგინალი ვალუტა“ აჩვენებს მხოლოდ იმ განცხადებებს, რომელთა ფასი თავიდანვე ამ ვალუტაშია.
           </p>
         </div>

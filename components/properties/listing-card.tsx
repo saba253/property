@@ -23,7 +23,12 @@ export function ListingCard({ listing, property, price, href }: ListingCardProps
   const facts = getCardFacts(property);
 
   return (
-    <Link href={href} className="group block rounded-card">
+    // Hover: soft image shadow and a faint cream background; no underline, scaling or layout shift
+    // (negative margin offsets the padding). Keyboard focus uses the global focus outline.
+    <Link
+      href={href}
+      className="group -m-2 block rounded-card p-2 transition-colors duration-150 hover:bg-cream/70"
+    >
       <div className="relative">
         <PropertyIllustration
           seed={listing.id}
@@ -37,9 +42,7 @@ export function ListingCard({ listing, property, price, href }: ListingCardProps
         <p className="text-xs font-semibold tracking-wide text-accent-700">
           {TRANSACTION_TYPES[listing.transactionType].label} · {PROPERTY_TYPES[property.type].label}
         </p>
-        <h2 className="mt-0.5 text-base font-semibold text-navy group-hover:underline">
-          {listing.title}
-        </h2>
+        <h2 className="mt-0.5 text-base font-semibold text-navy">{listing.title}</h2>
         <p className="mt-0.5 text-sm text-muted">
           {property.city}, {property.district}
         </p>

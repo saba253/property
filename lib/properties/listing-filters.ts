@@ -51,6 +51,10 @@ export type ListingFilters = {
   minBathrooms?: number;
   minFloor?: number;
   maxFloor?: number;
+  /** Total rooms: 1-4 match exactly; 5 means "5 or more" (MAX_ROOMS_FILTER). */
+  rooms?: number;
+  /** District name exactly as in the listing data (validated against known districts). */
+  district?: string;
   amenities?: AmenityKey[];
 };
 
@@ -71,7 +75,8 @@ export type FilterIssue =
   | { code: "invalid-city" }
   | { code: "invalid-currency" }
   | { code: "invalid-display-currency" }
-  | { code: "invalid-number"; field: NumericFilterKey | CountFilterKey }
+  | { code: "invalid-number"; field: NumericFilterKey | CountFilterKey | "rooms" }
+  | { code: "invalid-district" }
   | { code: "invalid-amenity" }
   | { code: "invalid-transaction" }
   | { code: "invalid-property-type" }
@@ -153,7 +158,21 @@ export function parseDisplayCurrency(query: RawQuery): {
  * - Unknown cities, unknown currencies, and invalid numbers are dropped and reported.
  * - A min greater than its max is swapped and reported.
  */
-export function parseListingFilters(query: RawQuery): ParsedListingFilters {
+/** The rooms filter offers 1, 2, 3, 4 and "5+"; 5 means five or more rooms. */
+export const MAX_ROOMS_FILTER = 5;
+
+export type ParseListingFiltersOptions = {
+  /**
+   * Districts present in the listing data. When given, an unknown `district` is dropped
+   * with a notice; there is no hardcoded district directory.
+   */
+  knownDistricts?: readonly string[];
+};
+
+export function parseListingFilters(
+  query: RawQuery,
+  options: ParseListingFiltersOptions = {},
+): ParsedListingFilters {
   const filters: ListingFilters = {};
   const issues: FilterIssue[] = [];
 
@@ -163,6 +182,25 @@ export function parseListingFilters(query: RawQuery): ParsedListingFilters {
       issues.push({ code: "invalid-transaction" });
     } else if (rawTransaction !== DEFAULT_TRANSACTION_TYPE) {
       filters.transaction = rawTransaction;
+    }
+  }
+
+  const rawRooms = readParam(query, "rooms");
+  if (rawRooms !== undefined) {
+    const rooms = parseWholeNumber(rawRooms, 1, MAX_ROOMS_FILTER);
+    if (rooms === null) {
+      issues.push({ code: "invalid-number", field: "rooms" });
+    } else {
+      filters.rooms = rooms;
+    }
+  }
+
+  const district = readParam(query, "district");
+  if (district) {
+    if (options.knownDistricts && !options.knownDistricts.includes(district)) {
+      issues.push({ code: "invalid-district" });
+    } else {
+      filters.district = district;
     }
   }
 
@@ -314,11 +352,19 @@ export function hasActiveFilters(filters: ListingFilters): boolean {
 export function countAdvancedFilters(filters: ListingFilters): number {
   const floor = filters.minFloor !== undefined || filters.maxFloor !== undefined ? 1 : 0;
   return (
+    (filters.district !== undefined ? 1 : 0) +
+    (filters.rooms !== undefined ? 1 : 0) +
     (filters.minBedrooms !== undefined ? 1 : 0) +
     (filters.minBathrooms !== undefined ? 1 : 0) +
     floor +
     (filters.amenities?.length ?? 0)
   );
+}
+
+/** Rooms filter: exact for 1-4, "5 or more" for 5. Unknown room counts never match. */
+function matchesRooms(rooms: number | undefined, wanted: number): boolean {
+  if (rooms === undefined) return false;
+  return wanted >= MAX_ROOMS_FILTER ? rooms >= MAX_ROOMS_FILTER : rooms === wanted;
 }
 
 /** True when the value is stated and at least `min`. Unknown values never match. */
@@ -362,11 +408,13 @@ export function filterListings(
     if (listing.transactionType !== transaction) continue;
     if (filters.propertyType && property.type !== filters.propertyType) continue;
     if (filters.citySlug && property.city !== cityName) continue;
+    if (filters.district && property.district !== filters.district) continue;
     if (filters.originalCurrency && listing.askingPrice.currency !== filters.originalCurrency) {
       continue;
     }
     if (filters.minArea !== undefined && property.areaSqm < filters.minArea) continue;
     if (filters.maxArea !== undefined && property.areaSqm > filters.maxArea) continue;
+    if (filters.rooms !== undefined && !matchesRooms(property.rooms, filters.rooms)) continue;
     if (!meetsMinimum(property.bedrooms, filters.minBedrooms)) continue;
     if (!meetsMinimum(property.bathrooms, filters.minBathrooms)) continue;
     // Only apartments have a floor; a floor filter never matches a house.

@@ -32,13 +32,34 @@ export type RentPeriod = "month";
 export type AmenityStatus = "yes" | "no" | "unknown";
 
 /** Relatively permanent building or apartment features. They belong to the Property. */
-export type PropertyFeatureKey = "balcony" | "parking" | "elevator" | "centralHeating";
+export type PropertyFeatureKey =
+  | "balcony"
+  | "parking"
+  | "garage"
+  | "elevator"
+  | "centralHeating"
+  | "naturalGas"
+  | "basement"
+  | "storageRoom"
+  | "builtInKitchen";
 
 /** Movable equipment included in a particular offer. It belongs to the Listing. */
 export type ListingEquipmentKey =
-  "television" | "bed" | "refrigerator" | "washingMachine" | "airConditioning" | "dishwasher";
+  | "furniture"
+  | "television"
+  | "bed"
+  | "refrigerator"
+  | "washingMachine"
+  | "airConditioning"
+  | "dishwasher";
 
-export type AmenityKey = PropertyFeatureKey | ListingEquipmentKey;
+/**
+ * Characteristics calculated from other facts instead of being stored, so they can never
+ * contradict them. "topFloor" comes from an apartment's `floor` and `totalFloors`.
+ */
+export type DerivedAmenityKey = "topFloor";
+
+export type AmenityKey = PropertyFeatureKey | ListingEquipmentKey | DerivedAmenityKey;
 
 /** Facts shared by every property type. */
 type PropertyBase = {

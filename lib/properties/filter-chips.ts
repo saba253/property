@@ -3,7 +3,11 @@ import { formatArea, formatMoney } from "@/lib/pricing/format-money";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
 import { PROPERTY_TYPES } from "@/lib/properties/listing-types";
 import { findCityBySlug } from "@/lib/properties/cities";
-import { type ListingFilters, getTransaction } from "@/lib/properties/listing-filters";
+import {
+  type ListingFilters,
+  MAX_ROOMS_FILTER,
+  getTransaction,
+} from "@/lib/properties/listing-filters";
 import type { AmenityKey, Currency } from "@/lib/properties/types";
 
 const LISTINGS_PATH = "/properties";
@@ -14,6 +18,8 @@ export type FilterChip = {
     | "propertyType"
     | "city"
     | "originalCurrency"
+    | "district"
+    | "rooms"
     | "price"
     | "area"
     | "bedrooms"
@@ -44,6 +50,8 @@ export function buildListingsHref(
   if (filters.maxPrice !== undefined) params.set("maxPrice", String(filters.maxPrice));
   if (filters.minArea !== undefined) params.set("minArea", String(filters.minArea));
   if (filters.maxArea !== undefined) params.set("maxArea", String(filters.maxArea));
+  if (filters.district) params.set("district", filters.district);
+  if (filters.rooms !== undefined) params.set("rooms", String(filters.rooms));
   if (filters.minBedrooms !== undefined) params.set("minBedrooms", String(filters.minBedrooms));
   if (filters.minBathrooms !== undefined) params.set("minBathrooms", String(filters.minBathrooms));
   if (filters.minFloor !== undefined) params.set("minFloor", String(filters.minFloor));
@@ -111,6 +119,22 @@ export function getFilterChips(
       key: "area",
       label: `ფართი: ${rangeLabel(min, max)}`,
       removeHref: href({ ...filters, minArea: undefined, maxArea: undefined }),
+    });
+  }
+
+  if (filters.district) {
+    chips.push({
+      key: "district",
+      label: `უბანი: ${filters.district}`,
+      removeHref: href({ ...filters, district: undefined }),
+    });
+  }
+
+  if (filters.rooms !== undefined) {
+    chips.push({
+      key: "rooms",
+      label: `ოთახი: ${filters.rooms >= MAX_ROOMS_FILTER ? `${MAX_ROOMS_FILTER}+` : filters.rooms}`,
+      removeHref: href({ ...filters, rooms: undefined }),
     });
   }
 

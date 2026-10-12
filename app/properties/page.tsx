@@ -3,9 +3,10 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { CurrencyToggle } from "@/components/currency/currency-toggle";
 import { RateNotice } from "@/components/currency/rate-notice";
-import { DemoNotice } from "@/components/properties/demo-label";
+import { DemoDisclosure } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import { TransactionTabs } from "@/components/properties/transaction-tabs";
+import { SearchFeedback } from "@/components/search/search-feedback";
 import {
   ListingFiltersForm,
   type ListingFilterFormValues,
@@ -14,7 +15,8 @@ import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
-import { getCitiesPresentIn } from "@/lib/properties/cities";
+import { getCitiesPresentIn, getDistrictsPresentIn } from "@/lib/properties/cities";
+import { parseSearchQuery } from "@/lib/search/parse-search-query";
 import {
   buildListingDetailHref,
   buildListingsHref,
@@ -32,6 +34,7 @@ import {
   filterListings,
   getTransaction,
   hasActiveFilters,
+  parseDisplayCurrency,
   parseListingFilters,
   parseNonNegativeNumber,
   switchTransaction,
@@ -44,7 +47,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const NUMERIC_FIELD_LABELS: Record<NumericFilterKey | CountFilterKey, string> = {
+const NUMERIC_FIELD_LABELS: Record<NumericFilterKey | CountFilterKey | "rooms", string> = {
+  rooms: "ოთახების რაოდენობა",
   minPrice: "მინიმალური ბიუჯეტი",
   maxPrice: "მაქსიმალური ბიუჯეტი",
   minArea: "მინიმალური ფართი",
@@ -75,6 +79,8 @@ function issueMessage(issue: FilterIssue): string {
       return "ზოგიერთი მითითებული კეთილმოწყობა უცნობია და არ გამოიყენება.";
     case "invalid-transaction":
       return "მითითებული გარიგების ტიპი არასწორია, ამიტომ ნაჩვენებია გასაყიდი განცხადებები.";
+    case "invalid-district":
+      return "მითითებული უბანი განცხადებებში ვერ მოიძებნა, ამიტომ უბნის ფილტრი არ გამოიყენება.";
     case "invalid-property-type":
       return "მითითებული ქონების ტიპი არასწორია, ამიტომ ნაჩვენებია ყველა ტიპი.";
     case "floor-not-applicable":
@@ -103,6 +109,8 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
     maxPrice: numeric("maxPrice"),
     minArea: numeric("minArea"),
     maxArea: numeric("maxArea"),
+    rooms: filters.rooms === undefined ? "" : String(filters.rooms),
+    district: filters.district ?? "",
     minBedrooms: count("minBedrooms"),
     minBathrooms: count("minBathrooms"),
     minFloor: count("minFloor"),
@@ -112,14 +120,31 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
 }
 
 async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">, "searchParams">) {
-  const query = await searchParams;
+  const rawQuery = await searchParams;
   // One exchange-rate snapshot for the whole request: filtering and display both use it.
   const rateState = await getExchangeRateState();
-  const parsed = parseListingFilters(query);
-  const { filters, display } = parsed;
   const allItems = getActiveDemoListingsWithProperties();
-  const { matches, notComparableCount } = filterListings(allItems, filters, display, rateState);
   const cities = getCitiesPresentIn(allItems.map((item) => item.property.city));
+  const districts = getDistrictsPresentIn(allItems.map((item) => item.property));
+
+  // Free-text search from the homepage (?q=...). Recognized terms become the same URL parameters
+  // the filter form uses and go through the same validation below; words in the text win over
+  // the Buy/Rent tab, because they are the more specific statement of intent.
+  const searchText = (Array.isArray(rawQuery.q) ? rawQuery.q[0] : rawQuery.q)?.trim() ?? "";
+  const search = searchText
+    ? parseSearchQuery(searchText, {
+        cities,
+        districts,
+        defaultCurrency: parseDisplayCurrency(rawQuery).display,
+      })
+    : null;
+  const { q: _searchText, ...explicitQuery } = rawQuery;
+  void _searchText;
+  const query: RawQuery = search ? { ...explicitQuery, ...search.params } : explicitQuery;
+
+  const parsed = parseListingFilters(query, { knownDistricts: districts.map((d) => d.name) });
+  const { filters, display } = parsed;
+  const { matches, notComparableCount } = filterListings(allItems, filters, display, rateState);
   const values = toFormValues(query, parsed);
   const filtersActive = hasActiveFilters(filters);
   const chips = getFilterChips(filters, display);
@@ -148,118 +173,137 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <TransactionTabs current={transaction} hrefFor={transactionHrefs} />
-        <CurrencyToggle current={display} hrefFor={toggleHrefs} />
-      </div>
+      <section aria-label="ძიება და ფილტრები" className="border-b border-line bg-cream">
+        <div className={`${pageContainer} py-4 sm:py-5`}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <TransactionTabs current={transaction} hrefFor={transactionHrefs} />
+            <CurrencyToggle current={display} hrefFor={toggleHrefs} />
+          </div>
 
-      {/* The key remounts the form so its fields always match the current URL. */}
-      <ListingFiltersForm
-        key={JSON.stringify({ values, display })}
-        cities={cities}
-        values={values}
-        display={display}
-        transaction={transaction}
-        advancedCount={countAdvancedFilters(filters)}
-        showReset={filtersActive || parsed.issues.length > 0}
-        resetHref={resetHref}
-      />
+          {/* The key remounts the form so its fields always match the current URL. */}
+          <ListingFiltersForm
+            key={JSON.stringify({ values, display })}
+            cities={cities}
+            districts={districts}
+            values={values}
+            display={display}
+            transaction={transaction}
+            advancedCount={countAdvancedFilters(filters)}
+            showReset={filtersActive || parsed.issues.length > 0}
+            resetHref={resetHref}
+          />
 
-      {parsed.issues.length > 0 && (
-        <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
-          {parsed.issues.map((issue, index) => (
-            <li key={index}>{issueMessage(issue)}</li>
-          ))}
-        </ul>
-      )}
+          {search && <SearchFeedback query={searchText} search={search} />}
 
-      {resultsIncomplete && (
-        <p
-          role="alert"
-          className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"
-        >
-          <strong className="font-semibold">შედეგები არასრულია.</strong> გაცვლითი კურსი
-          მიუწვდომელია, ამიტომ {notComparableCount} განცხადება, რომლის ორიგინალი ფასი{" "}
-          {otherCurrency}-შია, ბიუჯეტთან ვერ შედარდა და სიაში არ არის. სცადეთ მოგვიანებით ან
-          მოხსენით ბიუჯეტის ფილტრი.
-        </p>
-      )}
+          {parsed.issues.length > 0 && (
+            <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
+              {parsed.issues.map((issue, index) => (
+                <li key={index}>{issueMessage(issue)}</li>
+              ))}
+            </ul>
+          )}
 
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p role="status" className="text-base font-semibold text-ink">
-          ნაპოვნია {matches.length} განცხადება
-          {filtersActive ? (
-            <span className="font-normal text-muted"> (სულ {transactionTotal})</span>
-          ) : null}
-          {resultsIncomplete ? (
-            <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
-          ) : null}
-        </p>
+          {resultsIncomplete && (
+            <p
+              role="alert"
+              className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"
+            >
+              <strong className="font-semibold">შედეგები არასრულია.</strong> გაცვლითი კურსი
+              მიუწვდომელია, ამიტომ {notComparableCount} განცხადება, რომლის ორიგინალი ფასი{" "}
+              {otherCurrency}-შია, ბიუჯეტთან ვერ შედარდა და სიაში არ არის. სცადეთ მოგვიანებით ან
+              მოხსენით ბიუჯეტის ფილტრი.
+            </p>
+          )}
+        </div>
+      </section>
 
-        {chips.length > 0 && (
-          <ul aria-label="არჩეული ფილტრები" className="flex flex-wrap gap-2">
-            {chips.map((chip) => (
-              <li key={chip.key}>
-                <Link
-                  href={chip.removeHref}
-                  aria-label={`${chip.label} — ფილტრის მოხსნა`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface py-1.5 pr-2.5 pl-3 text-sm text-ink transition-colors hover:border-ink"
-                >
-                  {chip.label}
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-muted">
-                    <path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" />
-                  </svg>
-                </Link>
+      <div className={`${pageContainer} py-5 sm:py-6`}>
+        {/* Compact transparency row: demo disclosure and the NBG rate bar. */}
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <DemoDisclosure />
+          <div className="lg:min-w-[26rem]">
+            <RateNotice rateState={rateState} />
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p role="status" className="text-base font-semibold text-ink">
+            ნაპოვნია {matches.length} განცხადება
+            {filtersActive ? (
+              <span className="font-normal text-muted"> (სულ {transactionTotal})</span>
+            ) : null}
+            {resultsIncomplete ? (
+              <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
+            ) : null}
+          </p>
+
+          {chips.length > 0 && (
+            <ul aria-label="არჩეული ფილტრები" className="flex flex-wrap gap-2">
+              {chips.map((chip) => (
+                <li key={chip.key}>
+                  <Link
+                    href={chip.removeHref}
+                    aria-label={`${chip.label} — ფილტრის მოხსნა`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface py-1.5 pr-2.5 pl-3 text-sm text-ink transition-colors hover:border-ink"
+                  >
+                    {chip.label}
+                    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-muted">
+                      <path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" />
+                    </svg>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {matches.length > 0 ? (
+          <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            {matches.map((item) => (
+              <li key={item.listing.id}>
+                <ListingCard
+                  {...item}
+                  price={getListingDisplayPrice(item, display, rateState)}
+                  href={buildListingDetailHref(item.listing.id, display)}
+                />
               </li>
             ))}
           </ul>
-        )}
-      </div>
-
-      {matches.length > 0 ? (
-        <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-          {matches.map((item) => (
-            <li key={item.listing.id}>
-              <ListingCard
-                {...item}
-                price={getListingDisplayPrice(item, display, rateState)}
-                href={buildListingDetailHref(item.listing.id, display)}
+        ) : (
+          <div className="mt-5 rounded-card border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
+            <svg viewBox="0 0 48 48" aria-hidden="true" className="mx-auto h-12 w-12">
+              <circle
+                cx="21"
+                cy="21"
+                r="13"
+                fill="none"
+                strokeWidth="4"
+                className="stroke-sand-200"
               />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="mt-5 rounded-card border border-dashed border-line-strong bg-surface px-6 py-12 text-center">
-          <svg viewBox="0 0 48 48" aria-hidden="true" className="mx-auto h-12 w-12">
-            <circle
-              cx="21"
-              cy="21"
-              r="13"
-              fill="none"
-              strokeWidth="4"
-              className="stroke-sand-200"
-            />
-            <path
-              d="m31 31 9 9"
-              strokeWidth="4"
-              strokeLinecap="round"
-              className="stroke-sand-500"
-            />
-          </svg>
-          <h2 className="mt-4 text-lg font-semibold text-navy">
-            ამ ფილტრებით განცხადება ვერ მოიძებნა
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-            სცადეთ ბიუჯეტის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
-          </p>
-          <Link href={resetHref} className={`${buttonPrimary} mt-6`}>
-            ფილტრების გასუფთავება
-          </Link>
-        </div>
-      )}
+              <path
+                d="m31 31 9 9"
+                strokeWidth="4"
+                strokeLinecap="round"
+                className="stroke-sand-500"
+              />
+            </svg>
+            <h2 className="mt-4 text-lg font-semibold text-navy">
+              ამ ფილტრებით განცხადება ვერ მოიძებნა
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
+              სცადეთ ბიუჯეტის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
+            </p>
+            <Link href={resetHref} className={`${buttonPrimary} mt-6`}>
+              ფილტრების გასუფთავება
+            </Link>
+          </div>
+        )}
 
-      <div className="mt-10">
-        <RateNotice rateState={rateState} />
+        <p className="mt-12 max-w-3xl border-t border-line pt-5 text-xs leading-5 text-muted">
+          ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა (ქირისთვის — თვიური
+          ქირის) და ფართის მიხედვით. ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს
+          სამართლიან ღირებულებას.
+        </p>
       </div>
     </>
   );
@@ -269,8 +313,13 @@ function ListingsSkeleton() {
   return (
     <div aria-busy="true">
       <p className="sr-only">განცხადებები იტვირთება…</p>
-      <div className="h-40 animate-pulse rounded-card bg-line/60 lg:h-28" />
-      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="border-b border-line bg-cream">
+        <div className={`${pageContainer} py-4 sm:py-5`}>
+          <div className="h-10 w-64 animate-pulse rounded-full bg-line/70" />
+          <div className="mt-3 h-40 animate-pulse rounded-card bg-line/60 lg:h-28" />
+        </div>
+      </div>
+      <div className={`${pageContainer} mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3`}>
         {[0, 1, 2].map((index) => (
           <div key={index} className="aspect-[4/3] animate-pulse rounded-card bg-line/60" />
         ))}
@@ -282,39 +331,13 @@ function ListingsSkeleton() {
 export default function DemoListingsPage({ searchParams }: PageProps<"/properties">) {
   return (
     <main className="flex-1">
-      <section className="border-b border-line bg-cream">
-        <div className={`${pageContainer} py-8 sm:py-12`}>
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold tracking-tight text-navy sm:text-4xl">
-              დემო განცხადებები
-            </h1>
-            <p className="mt-2 text-base leading-7 text-muted">
-              შეადარეთ განცხადებებში მითითებული ფასები და ფასი კვადრატულ მეტრზე. ფასები ნაჩვენებია
-              არჩეულ ვალუტაში (ნაგულისხმევად USD), ორიგინალი ფასი კი ყოველთვის მითითებულია.
-            </p>
-          </div>
-
-          <div className="mt-6">
-            <DemoNotice title="დემო განცხადებები.">
-              მონაცემები და ილუსტრაციები გამოგონილია და არ წარმოადგენს რეალურ ქონებას ან რეალურ
-              განცხადებებს.
-            </DemoNotice>
-          </div>
-        </div>
-      </section>
-
-      <div className={`${pageContainer} py-8 sm:py-10`}>
-        {/* Filters depend on the URL query, so they render at request time inside Suspense. */}
-        {/* A map view can be added beside the results in a later step. */}
-        <Suspense fallback={<ListingsSkeleton />}>
-          <FilteredListings searchParams={searchParams} />
-        </Suspense>
-
-        <p className="mt-12 max-w-3xl border-t border-line pt-6 text-sm leading-6 text-muted">
-          ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის მიხედვით. ეს არ
-          არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან ღირებულებას.
-        </p>
-      </div>
+      {/* Visually hidden heading: the page opens directly with the search controls. */}
+      <h1 className="sr-only">უძრავი ქონების ძიება (დემო განცხადებები)</h1>
+      {/* Filters depend on the URL query, so they render at request time inside Suspense. */}
+      {/* A map view can be added beside the results in a later step. */}
+      <Suspense fallback={<ListingsSkeleton />}>
+        <FilteredListings searchParams={searchParams} />
+      </Suspense>
     </main>
   );
 }

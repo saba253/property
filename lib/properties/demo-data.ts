@@ -16,7 +16,14 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 1,
     floor: 5,
     totalFloors: 12,
-    features: { balcony: "yes", elevator: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      elevator: "yes",
+      centralHeating: "yes",
+      naturalGas: "yes",
+      basement: "no",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -30,7 +37,14 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 1,
     floor: 8,
     totalFloors: 16,
-    features: { balcony: "yes", parking: "no", elevator: "yes", centralHeating: "no" },
+    features: {
+      balcony: "yes",
+      parking: "no",
+      elevator: "yes",
+      centralHeating: "no",
+      naturalGas: "yes",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -44,7 +58,16 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 2,
     floor: 10,
     totalFloors: 18,
-    features: { balcony: "yes", parking: "yes", elevator: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      parking: "yes",
+      elevator: "yes",
+      centralHeating: "yes",
+      garage: "yes",
+      naturalGas: "yes",
+      storageRoom: "yes",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -57,7 +80,7 @@ export const demoProperties: readonly Property[] = [
     bedrooms: 1,
     bathrooms: 1,
     floor: 2,
-    features: { balcony: "no", elevator: "no" },
+    features: { balcony: "no", elevator: "no", naturalGas: "yes", basement: "yes" },
     dataSource: "demo",
   },
   {
@@ -71,7 +94,14 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 1,
     floor: 21,
     totalFloors: 30,
-    features: { balcony: "yes", parking: "yes", elevator: "yes", centralHeating: "no" },
+    features: {
+      balcony: "yes",
+      parking: "yes",
+      elevator: "yes",
+      centralHeating: "no",
+      naturalGas: "no",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -83,9 +113,17 @@ export const demoProperties: readonly Property[] = [
     rooms: 4,
     bedrooms: 3,
     bathrooms: 2,
-    floor: 4,
+    floor: 9,
     totalFloors: 9,
-    features: { balcony: "yes", parking: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      parking: "yes",
+      centralHeating: "yes",
+      garage: "no",
+      naturalGas: "yes",
+      storageRoom: "yes",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -99,7 +137,15 @@ export const demoProperties: readonly Property[] = [
     bedrooms: 4,
     bathrooms: 3,
     storeys: 2,
-    features: { balcony: "yes", parking: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      parking: "yes",
+      centralHeating: "yes",
+      garage: "yes",
+      naturalGas: "yes",
+      basement: "yes",
+      storageRoom: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -112,7 +158,7 @@ export const demoProperties: readonly Property[] = [
     bedrooms: 3,
     bathrooms: 2,
     storeys: 2,
-    features: { parking: "yes", centralHeating: "no" },
+    features: { parking: "yes", centralHeating: "no", garage: "no", naturalGas: "yes" },
     dataSource: "demo",
   },
   {
@@ -126,7 +172,13 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 1,
     floor: 7,
     totalFloors: 14,
-    features: { balcony: "yes", elevator: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      elevator: "yes",
+      centralHeating: "yes",
+      naturalGas: "yes",
+      builtInKitchen: "yes",
+    },
     dataSource: "demo",
   },
   {
@@ -140,7 +192,7 @@ export const demoProperties: readonly Property[] = [
     bathrooms: 1,
     floor: 15,
     totalFloors: 25,
-    features: { balcony: "yes", elevator: "yes", centralHeating: "no" },
+    features: { balcony: "yes", elevator: "yes", centralHeating: "no", builtInKitchen: "yes" },
     dataSource: "demo",
   },
   {
@@ -154,7 +206,14 @@ export const demoProperties: readonly Property[] = [
     bedrooms: 4,
     bathrooms: 3,
     storeys: 2,
-    features: { balcony: "yes", parking: "yes", centralHeating: "yes" },
+    features: {
+      balcony: "yes",
+      parking: "yes",
+      centralHeating: "yes",
+      garage: "yes",
+      naturalGas: "yes",
+      basement: "yes",
+    },
     dataSource: "demo",
   },
 ];
@@ -168,6 +227,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 150000, currency: "USD" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "no",
       refrigerator: "yes",
       washingMachine: "yes",
@@ -184,6 +244,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 220000, currency: "GEL" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "yes",
       bed: "yes",
       refrigerator: "yes",
@@ -209,6 +270,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 165000, currency: "GEL" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "yes",
       bed: "yes",
       refrigerator: "yes",
@@ -226,6 +288,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 62000, currency: "USD" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "yes",
       bed: "yes",
       refrigerator: "yes",
@@ -243,6 +306,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 410000, currency: "GEL" },
     status: "active",
     equipment: {
+      furniture: "no",
       television: "no",
       bed: "no",
       refrigerator: "yes",
@@ -280,6 +344,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 1200, currency: "USD" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "yes",
       bed: "yes",
       refrigerator: "yes",
@@ -298,6 +363,7 @@ export const demoListings: readonly Listing[] = [
     askingPrice: { amount: 1800, currency: "GEL" },
     status: "active",
     equipment: {
+      furniture: "yes",
       television: "yes",
       bed: "yes",
       refrigerator: "yes",
@@ -315,7 +381,13 @@ export const demoListings: readonly Listing[] = [
     rentPeriod: "month",
     askingPrice: { amount: 2500, currency: "USD" },
     status: "active",
-    equipment: { television: "yes", bed: "yes", refrigerator: "yes", washingMachine: "yes" },
+    equipment: {
+      furniture: "yes",
+      television: "yes",
+      bed: "yes",
+      refrigerator: "yes",
+      washingMachine: "yes",
+    },
     dataSource: "demo",
   },
 ];

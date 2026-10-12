@@ -31,3 +31,16 @@ export function DemoNotice({ title, children }: { title: string; children: React
     </div>
   );
 }
+
+/** One-line demo disclosure for search results: always visible, but compact. */
+export function DemoDisclosure() {
+  return (
+    <p
+      role="note"
+      className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-sm text-amber-900 ring-1 ring-amber-200"
+    >
+      <span className="font-semibold">დემო</span>
+      <span>ყველა განცხადება, ფასი და ილუსტრაცია გამოგონილია.</span>
+    </p>
+  );
+}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findCityBySlug, getCitiesPresentIn, knownCities } from "@/lib/properties/cities";
+import {
+  findCityBySlug,
+  getCitiesPresentIn,
+  getDistrictsPresentIn,
+  knownCities,
+} from "@/lib/properties/cities";
 import { demoProperties } from "@/lib/properties/demo-data";
 
 describe("findCityBySlug", () => {
@@ -26,5 +31,20 @@ describe("getCitiesPresentIn", () => {
     for (const property of demoProperties) {
       expect(names).toContain(property.city);
     }
+  });
+});
+
+describe("getDistrictsPresentIn", () => {
+  it("lists districts once each, in first-seen order, with their city", () => {
+    expect(
+      getDistrictsPresentIn([
+        { city: "თბილისი", district: "ვაკე" },
+        { city: "ბათუმი", district: "ახალი ბულვარი" },
+        { city: "თბილისი", district: "ვაკე" },
+      ]),
+    ).toEqual([
+      { name: "ვაკე", city: "თბილისი" },
+      { name: "ახალი ბულვარი", city: "ბათუმი" },
+    ]);
   });
 });

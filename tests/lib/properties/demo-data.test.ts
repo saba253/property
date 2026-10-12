@@ -151,3 +151,28 @@ describe("demo data", () => {
     }
   });
 });
+
+describe("demo data for the expanded characteristics", () => {
+  it("has at least one apartment on the top floor and one below it", () => {
+    const apartments = demoProperties.filter((property) => property.type === "apartment");
+    const statuses = apartments.map((property) =>
+      property.type === "apartment" &&
+      property.floor !== undefined &&
+      property.totalFloors !== undefined
+        ? property.floor === property.totalFloors
+        : null,
+    );
+    expect(statuses).toContain(true);
+    expect(statuses).toContain(false);
+  });
+
+  it("uses each new characteristic at least once", () => {
+    const features = new Set(
+      demoProperties.flatMap((property) => Object.keys(property.features ?? {})),
+    );
+    for (const key of ["garage", "naturalGas", "basement", "storageRoom", "builtInKitchen"]) {
+      expect(features.has(key)).toBe(true);
+    }
+    expect(demoListings.some((listing) => listing.equipment?.furniture !== undefined)).toBe(true);
+  });
+});
