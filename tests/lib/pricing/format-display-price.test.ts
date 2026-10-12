@@ -4,6 +4,7 @@ import {
   formatDisplayAmount,
   formatDisplayPricePerSqm,
   originalPriceNote,
+  periodSuffix,
 } from "@/lib/pricing/format-display-price";
 
 const converted: DisplayPrice = {
@@ -12,6 +13,7 @@ const converted: DisplayPrice = {
   amount: 84615,
   pricePerSqm: 1744.64,
   isConverted: true,
+  period: null,
 };
 const native: DisplayPrice = {
   original: { amount: 150000, currency: "USD" },
@@ -19,6 +21,7 @@ const native: DisplayPrice = {
   amount: 150000,
   pricePerSqm: 2307.69,
   isConverted: false,
+  period: null,
 };
 const unavailable: DisplayPrice = {
   original: { amount: 220000, currency: "GEL" },
@@ -26,6 +29,7 @@ const unavailable: DisplayPrice = {
   amount: null,
   pricePerSqm: null,
   isConverted: false,
+  period: null,
 };
 
 describe("formatDisplayAmount", () => {
@@ -60,5 +64,46 @@ describe("originalPriceNote", () => {
     expect(originalPriceNote(unavailable)).toBe(
       "ორიგინალი ფასი (GEL). USD-ში გადაყვანა ამჟამად მიუწვდომელია.",
     );
+  });
+});
+
+describe("rental prices", () => {
+  const rentConverted: DisplayPrice = {
+    original: { amount: 1800, currency: "GEL" },
+    currency: "USD",
+    amount: 692,
+    pricePerSqm: 15.38,
+    isConverted: true,
+    period: "month",
+  };
+  const rentNative: DisplayPrice = {
+    original: { amount: 1200, currency: "USD" },
+    currency: "USD",
+    amount: 1200,
+    pricePerSqm: 17.14,
+    isConverted: false,
+    period: "month",
+  };
+  const rentUnavailable: DisplayPrice = { ...rentConverted, amount: null, pricePerSqm: null };
+
+  it("always shows the monthly unit on the price", () => {
+    expect(formatDisplayAmount(rentConverted)).toBe("≈ $692 / თვე");
+    expect(formatDisplayAmount(rentNative)).toBe("$1,200 / თვე");
+    expect(formatDisplayAmount(rentUnavailable)).toBe("₾1,800 / თვე");
+  });
+
+  it("shows the monthly unit on price per m²", () => {
+    expect(formatDisplayPricePerSqm(rentConverted)).toBe("≈ $15.38 / მ² / თვე");
+    expect(formatDisplayPricePerSqm(rentNative)).toBe("$17.14 / მ² / თვე");
+  });
+
+  it("names the original monthly rent", () => {
+    expect(originalPriceNote(rentConverted)).toBe("ორიგინალი ქირა: ₾1,800 / თვე (GEL)");
+    expect(originalPriceNote(rentNative)).toBe("ორიგინალი ქირა USD-ში");
+  });
+
+  it("never adds a period to sale prices", () => {
+    expect(periodSuffix(null)).toBe("");
+    expect(formatDisplayAmount(native)).not.toContain("თვე");
   });
 });

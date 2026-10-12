@@ -3,15 +3,20 @@ import type { ExchangeRateState } from "@/lib/currency/exchange-rate";
 import { getDisplayPrice } from "@/lib/pricing/display-price";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import type { Listing, Property } from "@/lib/properties/types";
+
+/** Loose overrides for fixtures; the result is cast to the real union types. */
+type Overrides = Record<string, unknown>;
 import {
   type ListingFilters,
   convertBudgetForDisplay,
   countAdvancedFilters,
   filterListings,
+  getTransaction,
   hasActiveFilters,
   parseDisplayCurrency,
   parseListingFilters,
   parseNonNegativeNumber,
+  switchTransaction,
 } from "@/lib/properties/listing-filters";
 
 // Fixture rate with easy arithmetic, not a claim about any current rate.
@@ -29,26 +34,28 @@ function item(
   amount: number,
   currency: "USD" | "GEL",
   status: "active" | "inactive" = "active",
-  extra: { property?: Partial<Property>; listing?: Partial<Listing> } = {},
+  extra: { property?: Overrides; listing?: Overrides } = {},
 ): ListingWithProperty {
   return {
     listing: {
       id,
       propertyId: `p-${id}`,
       title: `დემო: ${id}`,
+      transactionType: "sale",
       askingPrice: { amount, currency },
       status,
       dataSource: "demo",
       ...extra.listing,
-    },
+    } as Listing,
     property: {
       id: `p-${id}`,
+      type: "apartment",
       city,
       district: "x",
       areaSqm,
       dataSource: "demo",
       ...extra.property,
-    },
+    } as Property,
   };
 }
 
@@ -417,5 +424,161 @@ describe("filterListings: structure and amenities", () => {
   it("combines structural, amenity, and budget filters", () => {
     expect(runDetailed({ amenities: ["balcony"], maxPrice: 100000 })).toEqual(["studio"]);
     expect(runDetailed({ minBedrooms: 1, amenities: ["balcony"], maxPrice: 100000 })).toEqual([]);
+  });
+});
+
+// Sale and rent, apartments and houses. Rents are monthly; fixture rate 1 USD = 2.6 GEL.
+const mixed = [
+  item("saleFlat", "თბილისი", 65, 150000, "USD", "active", {
+    property: { floor: 5, features: { elevator: "yes", balcony: "yes" } },
+  }),
+  item("saleHouse", "თბილისი", 180, 320000, "USD", "active", {
+    property: { type: "house", storeys: 2, landAreaSqm: 400, features: { balcony: "yes" } },
+  }),
+  item("rentFlat", "ბათუმი", 45, 1800, "GEL", "active", {
+    property: { floor: 15, features: { elevator: "yes", balcony: "yes" } },
+    listing: { transactionType: "rent", rentPeriod: "month" },
+  }),
+  item("rentHouse", "თბილისი", 220, 2500, "USD", "active", {
+    property: { type: "house", storeys: 2, features: { balcony: "yes" } },
+    listing: { transactionType: "rent", rentPeriod: "month" },
+  }),
+];
+
+function runMixed(filters: ListingFilters, display: "USD" | "GEL" = "USD", state = rate) {
+  return ids(filterListings(mixed, filters, display, state));
+}
+
+describe("parseListingFilters: transaction and property type", () => {
+  it("defaults to For Sale and keeps it implicit", () => {
+    expect(parseListingFilters({}).filters.transaction).toBeUndefined();
+    expect(parseListingFilters({ transaction: "sale" }).filters).toEqual({});
+    expect(getTransaction({})).toBe("sale");
+  });
+
+  it("parses For Rent and property types in any letter case", () => {
+    const { filters, issues } = parseListingFilters({ transaction: "RENT", type: "House" });
+    expect(filters).toEqual({ transaction: "rent", propertyType: "house" });
+    expect(issues).toEqual([]);
+  });
+
+  it("rejects 'all' and unknown values, falling back to For Sale and every type", () => {
+    const result = parseListingFilters({ transaction: "all", type: "land" });
+    expect(result.filters).toEqual({});
+    expect(result.issues).toEqual([
+      { code: "invalid-transaction" },
+      { code: "invalid-property-type" },
+    ]);
+  });
+
+  it("drops a floor range for private houses with a notice", () => {
+    const result = parseListingFilters({ type: "house", minFloor: "2", maxFloor: "9" });
+    expect(result.filters).toEqual({ propertyType: "house" });
+    expect(result.issues).toEqual([{ code: "floor-not-applicable" }]);
+  });
+
+  it("keeps a floor range for apartments and for any type", () => {
+    expect(parseListingFilters({ type: "apartment", minFloor: "2" }).filters).toEqual({
+      propertyType: "apartment",
+      minFloor: 2,
+    });
+    expect(parseListingFilters({ minFloor: "2" }).issues).toEqual([]);
+  });
+
+  it("drops apartment-only amenities for houses but keeps the others", () => {
+    const result = parseListingFilters({ type: "house", amenity: ["elevator", "parking"] });
+    expect(result.filters.amenities).toEqual(["parking"]);
+    expect(result.issues).toEqual([{ code: "amenity-not-applicable", amenity: "elevator" }]);
+    const only = parseListingFilters({ type: "house", amenity: "elevator" });
+    expect(only.filters.amenities).toBeUndefined();
+  });
+});
+
+describe("hasActiveFilters with transaction", () => {
+  it("does not treat the sale/rent choice as a filter to reset", () => {
+    expect(hasActiveFilters({ transaction: "rent" })).toBe(false);
+    expect(hasActiveFilters({ transaction: "rent", propertyType: "house" })).toBe(true);
+  });
+});
+
+describe("filterListings: transaction and property type", () => {
+  it("shows only sale listings by default", () => {
+    expect(runMixed({})).toEqual(["saleFlat", "saleHouse"]);
+  });
+
+  it("shows only rent listings for For Rent", () => {
+    expect(runMixed({ transaction: "rent" })).toEqual(["rentFlat", "rentHouse"]);
+  });
+
+  it("filters by property type within the transaction", () => {
+    expect(runMixed({ propertyType: "house" })).toEqual(["saleHouse"]);
+    expect(runMixed({ transaction: "rent", propertyType: "apartment" })).toEqual(["rentFlat"]);
+  });
+
+  it("never compares a monthly rent budget with sale prices", () => {
+    // A $3,000 budget: no sale price fits, and sale listings are never considered for rent.
+    expect(runMixed({ maxPrice: 3000 })).toEqual([]);
+    expect(runMixed({ transaction: "rent", maxPrice: 3000 })).toEqual(["rentFlat", "rentHouse"]);
+  });
+
+  it("compares monthly rent across currencies", () => {
+    // ₾1,800 / 2.6 = $692 per month.
+    expect(runMixed({ transaction: "rent", maxPrice: 692 })).toEqual(["rentFlat"]);
+    expect(runMixed({ transaction: "rent", maxPrice: 691 })).toEqual([]);
+    // $2,500 = ₾6,500 per month.
+    expect(runMixed({ transaction: "rent", minPrice: 6500 }, "GEL")).toEqual(["rentHouse"]);
+  });
+
+  it("never matches a house on floor or elevator filters", () => {
+    expect(runMixed({ minFloor: 0 })).toEqual(["saleFlat"]);
+    expect(runMixed({ amenities: ["elevator"] })).toEqual(["saleFlat"]);
+    expect(runMixed({ transaction: "rent", amenities: ["elevator"] })).toEqual(["rentFlat"]);
+  });
+
+  it("combines with city, area, and amenity filters", () => {
+    expect(runMixed({ citySlug: "tbilisi", amenities: ["balcony"] })).toEqual([
+      "saleFlat",
+      "saleHouse",
+    ]);
+    expect(runMixed({ transaction: "rent", citySlug: "tbilisi", minArea: 200 })).toEqual([
+      "rentHouse",
+    ]);
+  });
+
+  it("without a rate, compares rent only within the display currency and counts the rest", () => {
+    const result = filterListings(mixed, { transaction: "rent", maxPrice: 3000 }, "USD", noRate);
+    expect(ids(result)).toEqual(["rentHouse"]);
+    expect(result.notComparableCount).toBe(1);
+  });
+});
+
+describe("switchTransaction", () => {
+  it("keeps compatible filters and drops the budget", () => {
+    const filters: ListingFilters = {
+      propertyType: "apartment",
+      citySlug: "batumi",
+      minArea: 40,
+      minBedrooms: 1,
+      amenities: ["balcony"],
+      minPrice: 50000,
+      maxPrice: 200000,
+    };
+    expect(switchTransaction(filters, "rent")).toEqual({
+      ...filters,
+      transaction: "rent",
+      minPrice: undefined,
+      maxPrice: undefined,
+    });
+  });
+
+  it("returns to the implicit default when switching back to sale", () => {
+    const back = switchTransaction({ transaction: "rent", maxPrice: 900 }, "sale");
+    expect(back.transaction).toBeUndefined();
+    expect(back.maxPrice).toBeUndefined();
+  });
+
+  it("changes nothing when the transaction stays the same", () => {
+    const filters: ListingFilters = { maxPrice: 900 };
+    expect(switchTransaction(filters, "sale")).toBe(filters);
   });
 });

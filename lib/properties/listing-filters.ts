@@ -4,11 +4,23 @@ import {
   convertAmount,
   roundToWholeUnits,
 } from "@/lib/currency/exchange-rate";
-import { getDisplayPrice } from "@/lib/pricing/display-price";
-import { hasAllAmenities, isAmenityKey, normalizeAmenityKeys } from "@/lib/properties/amenities";
+import { getListingDisplayPrice } from "@/lib/pricing/display-price";
+import {
+  amenityAppliesTo,
+  getAmenityDefinition,
+  hasAllAmenities,
+  isAmenityKey,
+  normalizeAmenityKeys,
+} from "@/lib/properties/amenities";
 import { findCityBySlug } from "@/lib/properties/cities";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
-import type { AmenityKey, Currency } from "@/lib/properties/types";
+import {
+  DEFAULT_TRANSACTION_TYPE,
+  PROPERTY_TYPES,
+  isPropertyType,
+  isTransactionType,
+} from "@/lib/properties/listing-types";
+import type { AmenityKey, Currency, PropertyType, TransactionType } from "@/lib/properties/types";
 
 /**
  * Filters for the demo listings index. All fields are optional; a missing field means "any".
@@ -20,8 +32,15 @@ import type { AmenityKey, Currency } from "@/lib/properties/types";
  * - Structural filters (bedrooms, bathrooms, floor) only match listings that state the value;
  *   an unknown value never counts as a match.
  * - `amenities` uses AND matching: every selected amenity must be confirmed ("yes").
+ * - `transaction` is always applied: missing means For Sale (the default). There is no "all",
+ *   so a budget is never compared across sale prices and monthly rents.
+ * - `propertyType` limits results to apartments or private houses; missing means both.
+ *   Apartment-only filters (floor, elevator) never match a house.
  */
 export type ListingFilters = {
+  /** Only "rent" is stored; For Sale is the default and kept implicit for canonical URLs. */
+  transaction?: TransactionType;
+  propertyType?: PropertyType;
   citySlug?: string;
   originalCurrency?: Currency;
   minPrice?: number;
@@ -54,6 +73,10 @@ export type FilterIssue =
   | { code: "invalid-display-currency" }
   | { code: "invalid-number"; field: NumericFilterKey | CountFilterKey }
   | { code: "invalid-amenity" }
+  | { code: "invalid-transaction" }
+  | { code: "invalid-property-type" }
+  | { code: "floor-not-applicable" }
+  | { code: "amenity-not-applicable"; amenity: AmenityKey }
   | { code: "swapped-price-range" }
   | { code: "swapped-area-range" }
   | { code: "swapped-floor-range" };
@@ -133,6 +156,24 @@ export function parseDisplayCurrency(query: RawQuery): {
 export function parseListingFilters(query: RawQuery): ParsedListingFilters {
   const filters: ListingFilters = {};
   const issues: FilterIssue[] = [];
+
+  const rawTransaction = readParam(query, "transaction")?.toLowerCase();
+  if (rawTransaction) {
+    if (!isTransactionType(rawTransaction)) {
+      issues.push({ code: "invalid-transaction" });
+    } else if (rawTransaction !== DEFAULT_TRANSACTION_TYPE) {
+      filters.transaction = rawTransaction;
+    }
+  }
+
+  const rawType = readParam(query, "type")?.toLowerCase();
+  if (rawType) {
+    if (isPropertyType(rawType)) {
+      filters.propertyType = rawType;
+    } else {
+      issues.push({ code: "invalid-property-type" });
+    }
+  }
 
   const citySlug = readParam(query, "city")?.toLowerCase();
   if (citySlug) {
@@ -221,13 +262,51 @@ export function parseListingFilters(query: RawQuery): ParsedListingFilters {
     filters.amenities = normalizeAmenityKeys(amenities);
   }
 
+  // Filters that cannot apply to the chosen property type are dropped with a notice rather
+  // than silently returning no results (for example a floor range for private houses).
+  if (filters.propertyType) {
+    const type = filters.propertyType;
+    if (
+      !PROPERTY_TYPES[type].hasFloor &&
+      (filters.minFloor !== undefined || filters.maxFloor !== undefined)
+    ) {
+      delete filters.minFloor;
+      delete filters.maxFloor;
+      issues.push({ code: "floor-not-applicable" });
+    }
+    if (filters.amenities) {
+      const applicable = filters.amenities.filter((key) =>
+        amenityAppliesTo(getAmenityDefinition(key), type),
+      );
+      for (const key of filters.amenities) {
+        if (!applicable.includes(key)) {
+          issues.push({ code: "amenity-not-applicable", amenity: key });
+        }
+      }
+      if (applicable.length > 0) {
+        filters.amenities = applicable;
+      } else {
+        delete filters.amenities;
+      }
+    }
+  }
+
   return { filters, display, issues };
 }
 
-/** True when at least one filter is set. The display currency is a view setting, not a filter. */
+/** The transaction type the filters apply to: For Sale unless For Rent was chosen. */
+export function getTransaction(filters: ListingFilters): TransactionType {
+  return filters.transaction ?? DEFAULT_TRANSACTION_TYPE;
+}
+
+/**
+ * True when at least one filter is set. The display currency and the sale/rent choice are view
+ * settings (tabs), not filters to reset.
+ */
 export function hasActiveFilters(filters: ListingFilters): boolean {
-  return Object.values(filters).some((value) =>
-    Array.isArray(value) ? value.length > 0 : value !== undefined,
+  return Object.entries(filters).some(
+    ([key, value]) =>
+      key !== "transaction" && (Array.isArray(value) ? value.length > 0 : value !== undefined),
   );
 }
 
@@ -272,12 +351,16 @@ export function filterListings(
   rateState: ExchangeRateState,
 ): ListingFilterResult {
   const cityName = filters.citySlug ? findCityBySlug(filters.citySlug)?.name : undefined;
+  const transaction = getTransaction(filters);
   const matches: ListingWithProperty[] = [];
   let notComparableCount = 0;
 
   for (const item of items) {
     const { listing, property } = item;
     if (listing.status !== "active") continue;
+    // Sale and rent are never mixed, so a budget only ever compares like with like.
+    if (listing.transactionType !== transaction) continue;
+    if (filters.propertyType && property.type !== filters.propertyType) continue;
     if (filters.citySlug && property.city !== cityName) continue;
     if (filters.originalCurrency && listing.askingPrice.currency !== filters.originalCurrency) {
       continue;
@@ -286,17 +369,16 @@ export function filterListings(
     if (filters.maxArea !== undefined && property.areaSqm > filters.maxArea) continue;
     if (!meetsMinimum(property.bedrooms, filters.minBedrooms)) continue;
     if (!meetsMinimum(property.bathrooms, filters.minBathrooms)) continue;
-    if (!meetsMinimum(property.floor, filters.minFloor)) continue;
-    if (
-      filters.maxFloor !== undefined &&
-      (property.floor === undefined || property.floor > filters.maxFloor)
-    ) {
+    // Only apartments have a floor; a floor filter never matches a house.
+    const floor = property.type === "apartment" ? property.floor : undefined;
+    if (!meetsMinimum(floor, filters.minFloor)) continue;
+    if (filters.maxFloor !== undefined && (floor === undefined || floor > filters.maxFloor)) {
       continue;
     }
     if (filters.amenities && !hasAllAmenities(item, filters.amenities)) continue;
 
     if (hasPriceFilter(filters)) {
-      const { amount } = getDisplayPrice(listing.askingPrice, property.areaSqm, display, rateState);
+      const { amount } = getListingDisplayPrice(item, display, rateState);
       if (amount === null) {
         notComparableCount++;
         continue;
@@ -333,4 +415,21 @@ export function convertBudgetForDisplay(
       ? undefined
       : roundToWholeUnits(convertAmount(value, from, to, rateState.rate));
   return { ...filters, minPrice: convert(filters.minPrice), maxPrice: convert(filters.maxPrice) };
+}
+
+/**
+ * Filters to keep when switching between sale and rent. Everything compatible is kept (city,
+ * type, area, rooms, amenities, ...); the budget is dropped, because a sale price limit is not
+ * a monthly rent limit and vice versa.
+ */
+export function switchTransaction(filters: ListingFilters, to: TransactionType): ListingFilters {
+  if (getTransaction(filters) === to) {
+    return filters;
+  }
+  return {
+    ...filters,
+    transaction: to === DEFAULT_TRANSACTION_TYPE ? undefined : to,
+    minPrice: undefined,
+    maxPrice: undefined,
+  };
 }

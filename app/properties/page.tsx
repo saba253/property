@@ -5,13 +5,15 @@ import { CurrencyToggle } from "@/components/currency/currency-toggle";
 import { RateNotice } from "@/components/currency/rate-notice";
 import { DemoNotice } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
+import { TransactionTabs } from "@/components/properties/transaction-tabs";
 import {
   ListingFiltersForm,
   type ListingFilterFormValues,
 } from "@/components/properties/listing-filters-form";
 import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
-import { getDisplayPrice } from "@/lib/pricing/display-price";
+import { getListingDisplayPrice } from "@/lib/pricing/display-price";
+import { getAmenityDefinition } from "@/lib/properties/amenities";
 import { getCitiesPresentIn } from "@/lib/properties/cities";
 import {
   buildListingDetailHref,
@@ -28,11 +30,13 @@ import {
   convertBudgetForDisplay,
   countAdvancedFilters,
   filterListings,
+  getTransaction,
   hasActiveFilters,
   parseListingFilters,
   parseNonNegativeNumber,
+  switchTransaction,
 } from "@/lib/properties/listing-filters";
-import type { Currency } from "@/lib/properties/types";
+import type { Currency, TransactionType } from "@/lib/properties/types";
 
 export const metadata: Metadata = {
   title: "დემო განცხადებები | Property Intelligence",
@@ -69,6 +73,14 @@ function issueMessage(issue: FilterIssue): string {
       return "მინიმალური სართული მაქსიმალურზე მეტი იყო, ამიტომ მნიშვნელობები ადგილებით შეიცვალა.";
     case "invalid-amenity":
       return "ზოგიერთი მითითებული კეთილმოწყობა უცნობია და არ გამოიყენება.";
+    case "invalid-transaction":
+      return "მითითებული გარიგების ტიპი არასწორია, ამიტომ ნაჩვენებია გასაყიდი განცხადებები.";
+    case "invalid-property-type":
+      return "მითითებული ქონების ტიპი არასწორია, ამიტომ ნაჩვენებია ყველა ტიპი.";
+    case "floor-not-applicable":
+      return "სართულის ფილტრი მხოლოდ ბინებს ეხება, ამიტომ კერძო სახლებისთვის არ გამოიყენება.";
+    case "amenity-not-applicable":
+      return `„${getAmenityDefinition(issue.amenity).label}“ ამ ქონების ტიპს არ ეხება, ამიტომ ფილტრი არ გამოიყენება.`;
   }
 }
 
@@ -84,6 +96,7 @@ function toFormValues(query: RawQuery, { filters }: ParsedListingFilters): Listi
     filters[key] === undefined ? "" : String(filters[key]);
 
   return {
+    propertyType: filters.propertyType ?? "",
     city: filters.citySlug ?? "",
     currency: filters.originalCurrency ?? "",
     minPrice: numeric("minPrice"),
@@ -120,10 +133,23 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
       ? { USD: buildListingsHref(filters, "USD"), GEL: otherHref }
       : { USD: otherHref, GEL: buildListingsHref(filters, "GEL") };
   const resultsIncomplete = notComparableCount > 0;
+  const transaction = getTransaction(filters);
+  // "Total" counts only listings of the chosen transaction type (sale and rent are separate).
+  const transactionTotal = allItems.filter(
+    (item) => item.listing.transactionType === transaction,
+  ).length;
+  // Switching sale/rent keeps compatible filters but drops the budget (see switchTransaction).
+  const transactionHrefs: Record<TransactionType, string> = {
+    sale: buildListingsHref(switchTransaction(filters, "sale"), display),
+    rent: buildListingsHref(switchTransaction(filters, "rent"), display),
+  };
+  // Reset clears filters but keeps the chosen sale/rent tab and display currency.
+  const resetHref = buildListingsHref({ transaction: filters.transaction }, display);
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <TransactionTabs current={transaction} hrefFor={transactionHrefs} />
         <CurrencyToggle current={display} hrefFor={toggleHrefs} />
       </div>
 
@@ -133,9 +159,10 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         cities={cities}
         values={values}
         display={display}
+        transaction={transaction}
         advancedCount={countAdvancedFilters(filters)}
         showReset={filtersActive || parsed.issues.length > 0}
-        resetHref={buildListingsHref({}, display)}
+        resetHref={resetHref}
       />
 
       {parsed.issues.length > 0 && (
@@ -162,7 +189,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         <p role="status" className="text-base font-semibold text-ink">
           ნაპოვნია {matches.length} განცხადება
           {filtersActive ? (
-            <span className="font-normal text-muted"> (სულ {allItems.length})</span>
+            <span className="font-normal text-muted"> (სულ {transactionTotal})</span>
           ) : null}
           {resultsIncomplete ? (
             <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
@@ -195,12 +222,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
             <li key={item.listing.id}>
               <ListingCard
                 {...item}
-                price={getDisplayPrice(
-                  item.listing.askingPrice,
-                  item.property.areaSqm,
-                  display,
-                  rateState,
-                )}
+                price={getListingDisplayPrice(item, display, rateState)}
                 href={buildListingDetailHref(item.listing.id, display)}
               />
             </li>
@@ -230,7 +252,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
             სცადეთ ბიუჯეტის ან ფართის დიაპაზონის გაფართოება, სხვა ქალაქის ან ვალუტის არჩევა.
           </p>
-          <Link href={buildListingsHref({}, display)} className={`${buttonPrimary} mt-6`}>
+          <Link href={resetHref} className={`${buttonPrimary} mt-6`}>
             ფილტრების გასუფთავება
           </Link>
         </div>

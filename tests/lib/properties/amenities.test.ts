@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AMENITIES,
+  amenityAppliesTo,
   getAmenityStatus,
   groupAmenitiesByStatus,
   hasAllAmenities,
@@ -14,6 +15,7 @@ const item: ListingWithProperty = {
     id: "l",
     propertyId: "p",
     title: "დემო: ტესტი",
+    transactionType: "sale",
     askingPrice: { amount: 1, currency: "USD" },
     status: "active",
     equipment: { refrigerator: "yes", television: "no", bed: "unknown" },
@@ -21,6 +23,7 @@ const item: ListingWithProperty = {
   },
   property: {
     id: "p",
+    type: "apartment",
     city: "თბილისი",
     district: "x",
     areaSqm: 50,
@@ -123,5 +126,38 @@ describe("normalizeAmenityKeys", () => {
       "balcony",
       "dishwasher",
     ]);
+  });
+});
+
+describe("amenities by property type", () => {
+  const house: ListingWithProperty = {
+    listing: item.listing,
+    property: {
+      id: "h",
+      type: "house",
+      city: "თბილისი",
+      district: "x",
+      areaSqm: 180,
+      features: { balcony: "yes", elevator: "yes" },
+      dataSource: "demo",
+    },
+  };
+
+  it("marks the elevator as apartment-only", () => {
+    const elevator = AMENITIES.find((amenity) => amenity.key === "elevator")!;
+    expect(amenityAppliesTo(elevator, "apartment")).toBe(true);
+    expect(amenityAppliesTo(elevator, "house")).toBe(false);
+  });
+
+  it("does not show the elevator for a house", () => {
+    const building = groupAmenitiesByStatus(house, "property");
+    const keys = [...building.yes, ...building.no, ...building.unknown].map((a) => a.key);
+    expect(keys).not.toContain("elevator");
+    expect(keys).toContain("balcony");
+  });
+
+  it("never matches a house on an apartment-only amenity, even if data says yes", () => {
+    expect(hasAllAmenities(house, ["balcony"])).toBe(true);
+    expect(hasAllAmenities(house, ["elevator"])).toBe(false);
   });
 });

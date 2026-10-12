@@ -17,8 +17,9 @@ import { type Fact, FactList } from "@/components/properties/fact-list";
 import { PropertyIllustration } from "@/components/properties/property-illustration";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
-import { getDisplayPrice } from "@/lib/pricing/display-price";
+import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { getDemoListingIds, getDemoListingWithProperty } from "@/lib/properties/get-demo-listing";
+import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getStructuralFacts } from "@/lib/properties/property-facts";
 
 type PageProps = {
@@ -60,8 +61,8 @@ export default async function PropertyDetailPage({ params }: PageProps) {
   // One rate snapshot; both currencies are prepared so the client can switch without a fetch.
   const rateState = await getExchangeRateState();
   const prices: PricesByCurrency = {
-    USD: getDisplayPrice(listing.askingPrice, property.areaSqm, "USD", rateState),
-    GEL: getDisplayPrice(listing.askingPrice, property.areaSqm, "GEL", rateState),
+    USD: getListingDisplayPrice(data, "USD", rateState),
+    GEL: getListingDisplayPrice(data, "GEL", rateState),
   };
 
   // Unknown facts are shown as "not specified"; nothing is invented to fill gaps.
@@ -73,8 +74,10 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
   return (
     <main className={`${pageContainer} flex-1 py-6 sm:py-10`}>
-      <Suspense fallback={<BackToListingsLinkView display="USD" />}>
-        <BackToListingsLink />
+      <Suspense
+        fallback={<BackToListingsLinkView display="USD" transaction={listing.transactionType} />}
+      >
+        <BackToListingsLink transaction={listing.transactionType} />
       </Suspense>
 
       <div className="mt-4">
@@ -86,12 +89,21 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
       <PropertyIllustration
         seed={listing.id}
+        kind={property.type}
         className="mt-6 aspect-[4/3] rounded-card sm:aspect-[21/9]"
       />
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div>
-          <DemoBadge />
+          <div className="flex flex-wrap items-center gap-2">
+            <DemoBadge />
+            <span className="inline-flex items-center rounded-full bg-navy px-2.5 py-1 text-xs font-semibold text-white">
+              {TRANSACTION_TYPES[listing.transactionType].label}
+            </span>
+            <span className="inline-flex items-center rounded-full bg-cream px-2.5 py-1 text-xs font-semibold text-navy ring-1 ring-line">
+              {PROPERTY_TYPES[property.type].label}
+            </span>
+          </div>
           <h1 className="mt-3 text-2xl font-bold tracking-tight text-navy sm:text-4xl">
             {listing.title}
           </h1>
@@ -133,10 +145,18 @@ export default async function PropertyDetailPage({ params }: PageProps) {
               <DetailPriceFormula prices={prices} areaSqm={property.areaSqm} />
             </Suspense>
             <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
-              <p>
-                ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის მიხედვით.
-                ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან ღირებულებას.
-              </p>
+              {listing.transactionType === "rent" ? (
+                <p>
+                  ქირა კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული თვიური ქირისა და ფართის
+                  მიხედვით. ეს არის მოთხოვნილი ქირა და არა დადასტურებული ხელშეკრულების პირობები.
+                </p>
+              ) : (
+                <p>
+                  ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის
+                  მიხედვით. ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან
+                  ღირებულებას.
+                </p>
+              )}
               <p>
                 ორიგინალი ფასი და ვალუტა ({currency}) არ იცვლება. სხვა ვალუტაში ნაჩვენები ფასი
                 სავარაუდოა და ეროვნული ბანკის ოფიციალური კურსით გამოითვლება.

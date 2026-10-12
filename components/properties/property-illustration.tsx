@@ -1,4 +1,5 @@
 import { pickIllustrationVariant } from "@/lib/properties/illustration";
+import type { PropertyType } from "@/lib/properties/types";
 
 type Palette = {
   skyTop: string;
@@ -105,9 +106,41 @@ function Windows({ building, color }: { building: Building; color: string }) {
   );
 }
 
+/** A private house with a pitched roof, door, windows and a low fence. */
+function HouseScene({ palette }: { palette: Palette }) {
+  const [roof, body, accent] = palette.buildings;
+  return (
+    <g>
+      <rect x="252" y="98" width="16" height="34" fill={roof} />
+      <polygon points="104,156 200,86 296,156" fill={roof} />
+      <rect x="120" y="150" width="160" height="100" rx="4" fill={accent} />
+      <rect x="186" y="196" width="28" height="54" rx="3" fill={body} />
+      <rect x="138" y="172" width="32" height="28" rx="3" fill={palette.windows} />
+      <rect x="230" y="172" width="32" height="28" rx="3" fill={palette.windows} />
+      <rect x="153" y="172" width="2" height="28" fill={accent} opacity="0.6" />
+      <rect x="245" y="172" width="2" height="28" fill={accent} opacity="0.6" />
+      {Array.from({ length: 9 }, (_, index) => (
+        <rect
+          key={index}
+          // Four posts left of the house, five to the right.
+          x={index < 4 ? 36 + index * 18 : 306 + (index - 4) * 18}
+          y={GROUND_Y - 18}
+          width="5"
+          height="18"
+          rx="1.5"
+          fill={body}
+          opacity="0.55"
+        />
+      ))}
+    </g>
+  );
+}
+
 type PropertyIllustrationProps = {
   /** Stable seed, for example the listing id, so a listing always gets the same drawing. */
   seed: string;
+  /** Apartments are drawn as a block of buildings, houses as a single house. */
+  kind?: PropertyType;
   className?: string;
 };
 
@@ -115,7 +148,11 @@ type PropertyIllustrationProps = {
  * Original illustrated placeholder used instead of property photos. It is always labelled
  * as an illustration so it can never be mistaken for a real photo of the property.
  */
-export function PropertyIllustration({ seed, className = "" }: PropertyIllustrationProps) {
+export function PropertyIllustration({
+  seed,
+  kind = "apartment",
+  className = "",
+}: PropertyIllustrationProps) {
   const palette = PALETTES[pickIllustrationVariant(seed, PALETTES.length)];
   const layout = LAYOUTS[pickIllustrationVariant(`${seed}:layout`, LAYOUTS.length)];
   const gradientId = `sky-${seed.replace(/[^a-zA-Z0-9-]/g, "")}`;
@@ -137,19 +174,23 @@ export function PropertyIllustration({ seed, className = "" }: PropertyIllustrat
         </defs>
         <rect width="400" height="300" fill={`url(#${gradientId})`} />
         <circle cx="318" cy="68" r="26" fill={palette.sun} />
-        {layout.map((building, index) => (
-          <g key={index}>
-            <rect
-              x={building.x}
-              y={GROUND_Y - building.height}
-              width={building.width}
-              height={building.height}
-              rx={6}
-              fill={palette.buildings[index]}
-            />
-            <Windows building={building} color={palette.windows} />
-          </g>
-        ))}
+        {kind === "house" ? (
+          <HouseScene palette={palette} />
+        ) : (
+          layout.map((building, index) => (
+            <g key={index}>
+              <rect
+                x={building.x}
+                y={GROUND_Y - building.height}
+                width={building.width}
+                height={building.height}
+                rx={6}
+                fill={palette.buildings[index]}
+              />
+              <Windows building={building} color={palette.windows} />
+            </g>
+          ))
+        )}
         <rect y={GROUND_Y} width="400" height={300 - GROUND_Y} fill={palette.ground} />
         <rect x="20" y={GROUND_Y - 22} width="4" height="22" fill={palette.tree} />
         <circle cx="22" cy={GROUND_Y - 30} r="14" fill={palette.tree} />

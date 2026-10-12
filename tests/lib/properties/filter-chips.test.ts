@@ -140,3 +140,52 @@ describe("structure and amenity filters in URLs and chips", () => {
     expect(last.removeHref).toBe("/properties");
   });
 });
+
+describe("transaction and property type in URLs and chips", () => {
+  it("adds For Rent and the property type to the URL, but never For Sale", () => {
+    expect(buildListingsHref({ transaction: "rent", propertyType: "house" })).toBe(
+      "/properties?transaction=rent&type=house",
+    );
+    expect(buildListingsHref({ transaction: "sale" })).toBe("/properties");
+    expect(buildListingsHref({ transaction: "rent" }, "GEL")).toBe(
+      "/properties?display=GEL&transaction=rent",
+    );
+  });
+
+  it("round-trips through parseListingFilters", () => {
+    const filters: ListingFilters = {
+      transaction: "rent",
+      propertyType: "apartment",
+      citySlug: "batumi",
+      maxPrice: 900,
+      minFloor: 2,
+      amenities: ["elevator"],
+    };
+    const url = new URL(buildListingsHref(filters, "GEL"), "http://x");
+    const query: Record<string, string | string[]> = {};
+    for (const key of new Set(url.searchParams.keys())) {
+      const values = url.searchParams.getAll(key);
+      query[key] = values.length > 1 ? values : values[0];
+    }
+    expect(parseListingFilters(query)).toEqual({ filters, display: "GEL", issues: [] });
+  });
+
+  it("shows a removable property type chip", () => {
+    const [chip] = getFilterChips({ propertyType: "house", transaction: "rent" });
+    expect(chip).toEqual({
+      key: "propertyType",
+      label: "ტიპი: კერძო სახლი",
+      removeHref: "/properties?transaction=rent",
+    });
+  });
+
+  it("labels a rent budget as monthly rent", () => {
+    const [chip] = getFilterChips({ transaction: "rent", minPrice: 500, maxPrice: 1500 });
+    expect(chip.label).toBe("ქირა: $500 – $1,500 / თვე");
+    expect(chip.removeHref).toBe("/properties?transaction=rent");
+  });
+
+  it("keeps the sale budget label", () => {
+    expect(getFilterChips({ maxPrice: 100000 })[0].label).toBe("ბიუჯეტი: $100,000-მდე");
+  });
+});

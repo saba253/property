@@ -1,13 +1,24 @@
 import Form from "next/form";
 import Link from "next/link";
 import { card, fieldInput, fieldLabel } from "@/components/ui/styles";
-import { AMENITIES, AMENITY_GROUP_LABELS, type AmenityGroup } from "@/lib/properties/amenities";
+import {
+  AMENITIES,
+  AMENITY_GROUP_LABELS,
+  type AmenityGroup,
+  amenityAppliesTo,
+} from "@/lib/properties/amenities";
 import type { City } from "@/lib/properties/cities";
 import type { CountFilterKey, NumericFilterKey } from "@/lib/properties/listing-filters";
-import type { Currency } from "@/lib/properties/types";
+import {
+  PROPERTY_TYPES,
+  PROPERTY_TYPE_ORDER,
+  isPropertyType,
+} from "@/lib/properties/listing-types";
+import type { Currency, PropertyType, TransactionType } from "@/lib/properties/types";
 
 /** Initial values of the form fields, as strings. Empty string means "not set". */
 export type ListingFilterFormValues = {
+  propertyType: string;
   city: string;
   currency: string;
   amenities: readonly string[];
@@ -18,6 +29,8 @@ type ListingFiltersFormProps = {
   values: ListingFilterFormValues;
   /** Currency of the budget fields; kept on submit through a hidden field. */
   display: Currency;
+  /** Sale or rent; kept on submit through a hidden field. Changes the budget wording. */
+  transaction: TransactionType;
   /** Number of active "more filters"; the section starts open when it is above 0. */
   advancedCount: number;
   showReset: boolean;
@@ -133,15 +146,21 @@ function MinimumSelect({
 function AmenityFieldset({
   group,
   selected,
+  propertyType,
 }: {
   group: AmenityGroup;
   selected: ReadonlySet<string>;
+  propertyType: PropertyType | null;
 }) {
   return (
     <fieldset>
       <legend className={fieldLabel}>{AMENITY_GROUP_LABELS[group]}</legend>
       <div className="mt-2 flex flex-wrap gap-2">
-        {AMENITIES.filter((amenity) => amenity.group === group).map((amenity) => (
+        {AMENITIES.filter(
+          (amenity) =>
+            amenity.group === group &&
+            (propertyType === null || amenityAppliesTo(amenity, propertyType)),
+        ).map((amenity) => (
           <label
             key={amenity.key}
             className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-line-strong bg-surface px-3 py-2 text-sm text-ink transition-colors hover:border-navy has-checked:border-navy has-checked:bg-navy has-checked:text-white has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent-500"
@@ -165,17 +184,42 @@ export function ListingFiltersForm({
   cities,
   values,
   display,
+  transaction,
   advancedCount,
   showReset,
   resetHref,
 }: ListingFiltersFormProps) {
   const symbol = display === "USD" ? "$" : "₾";
   const selectedAmenities = new Set(values.amenities);
+  const propertyType = isPropertyType(values.propertyType) ? values.propertyType : null;
+  // Floor fields only make sense when apartments can be in the results.
+  const showFloor = propertyType === null || PROPERTY_TYPES[propertyType].hasFloor;
+  const isRent = transaction === "rent";
 
   return (
     <Form action="/properties" aria-label="განცხადებების ფილტრები" className={`${card} p-4 sm:p-5`}>
       <input type="hidden" name="display" value={display} />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1.6fr_1.6fr_auto] lg:items-end">
+      {isRent && <input type="hidden" name="transaction" value="rent" />}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1fr_1.5fr_1.5fr_auto] lg:items-end">
+        <div>
+          <label htmlFor="filter-type" className={fieldLabel}>
+            ქონების ტიპი
+          </label>
+          <select
+            id="filter-type"
+            name="type"
+            defaultValue={values.propertyType}
+            className={fieldInput}
+          >
+            <option value="">ნებისმიერი</option>
+            {PROPERTY_TYPE_ORDER.map((type) => (
+              <option key={type} value={type}>
+                {PROPERTY_TYPES[type].label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label htmlFor="filter-city" className={fieldLabel}>
             ქალაქი
@@ -190,7 +234,7 @@ export function ListingFiltersForm({
           </select>
         </div>
 
-        <div>
+        <div className="col-span-2 lg:col-span-1">
           <label htmlFor="filter-currency" className={fieldLabel}>
             ორიგინალი ვალუტა
           </label>
@@ -208,11 +252,15 @@ export function ListingFiltersForm({
         </div>
 
         <RangeFieldset
-          legend={`ბიუჯეტი (${symbol} ${display})`}
+          legend={isRent ? `ქირა თვეში (${symbol} ${display})` : `ბიუჯეტი (${symbol} ${display})`}
           minName="minPrice"
           maxName="maxPrice"
-          minLabel={`მინიმალური ბიუჯეტი, ${display}`}
-          maxLabel={`მაქსიმალური ბიუჯეტი, ${display}`}
+          minLabel={
+            isRent ? `მინიმალური თვიური ქირა, ${display}` : `მინიმალური ბიუჯეტი, ${display}`
+          }
+          maxLabel={
+            isRent ? `მაქსიმალური თვიური ქირა, ${display}` : `მაქსიმალური ბიუჯეტი, ${display}`
+          }
           values={values}
           describedBy="filter-price-hint"
         />
@@ -270,20 +318,30 @@ export function ListingFiltersForm({
               options={[1, 2, 3]}
               defaultValue={values.minBathrooms}
             />
-            <RangeFieldset
-              legend="სართული"
-              minName="minFloor"
-              maxName="maxFloor"
-              minLabel="მინიმალური სართული"
-              maxLabel="მაქსიმალური სართული"
-              values={values}
-              wholeNumbers
-              className="col-span-2"
-            />
+            {showFloor && (
+              <RangeFieldset
+                legend={propertyType === null ? "სართული (მხოლოდ ბინები)" : "სართული"}
+                minName="minFloor"
+                maxName="maxFloor"
+                minLabel="მინიმალური სართული"
+                maxLabel="მაქსიმალური სართული"
+                values={values}
+                wholeNumbers
+                className="col-span-2"
+              />
+            )}
           </div>
 
-          <AmenityFieldset group="property" selected={selectedAmenities} />
-          <AmenityFieldset group="listing" selected={selectedAmenities} />
+          <AmenityFieldset
+            group="property"
+            selected={selectedAmenities}
+            propertyType={propertyType}
+          />
+          <AmenityFieldset
+            group="listing"
+            selected={selectedAmenities}
+            propertyType={propertyType}
+          />
 
           <p className="text-xs leading-5 text-muted">
             რამდენიმე არჩეული კეთილმოწყობის შემთხვევაში ნაჩვენებია მხოლოდ ის განცხადებები, სადაც
@@ -296,8 +354,8 @@ export function ListingFiltersForm({
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1 text-xs leading-5 text-muted">
           <p id="filter-price-hint">
-            ბიუჯეტი მითითებულია {display}-ში. სხვა ვალუტაში განთავსებული განცხადებები ეროვნული
-            ბანკის ოფიციალური კურსით სავარაუდოდ შედარდება.
+            {isRent ? "თვიური ქირის ბიუჯეტი" : "ბიუჯეტი"} მითითებულია {display}-ში. სხვა ვალუტაში
+            განთავსებული განცხადებები ეროვნული ბანკის ოფიციალური კურსით სავარაუდოდ შედარდება.
           </p>
           <p id="filter-currency-hint">
             „ორიგინალი ვალუტა“ აჩვენებს მხოლოდ იმ განცხადებებს, რომელთა ფასი თავიდანვე ამ ვალუტაშია.

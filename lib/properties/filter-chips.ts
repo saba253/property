@@ -1,8 +1,9 @@
 import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import { formatArea, formatMoney } from "@/lib/pricing/format-money";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
+import { PROPERTY_TYPES } from "@/lib/properties/listing-types";
 import { findCityBySlug } from "@/lib/properties/cities";
-import type { ListingFilters } from "@/lib/properties/listing-filters";
+import { type ListingFilters, getTransaction } from "@/lib/properties/listing-filters";
 import type { AmenityKey, Currency } from "@/lib/properties/types";
 
 const LISTINGS_PATH = "/properties";
@@ -10,6 +11,7 @@ const LISTINGS_PATH = "/properties";
 /** One applied filter, shown as a removable chip. `removeHref` is the URL without it. */
 export type FilterChip = {
   key:
+    | "propertyType"
     | "city"
     | "originalCurrency"
     | "price"
@@ -32,6 +34,10 @@ export function buildListingsHref(
 ): string {
   const params = new URLSearchParams();
   if (display !== DEFAULT_DISPLAY_CURRENCY) params.set("display", display);
+  if (filters.transaction && filters.transaction !== "sale") {
+    params.set("transaction", filters.transaction);
+  }
+  if (filters.propertyType) params.set("type", filters.propertyType);
   if (filters.citySlug) params.set("city", filters.citySlug);
   if (filters.originalCurrency) params.set("currency", filters.originalCurrency);
   if (filters.minPrice !== undefined) params.set("minPrice", String(filters.minPrice));
@@ -62,6 +68,14 @@ export function getFilterChips(
   const chips: FilterChip[] = [];
   const href = (next: ListingFilters) => buildListingsHref(next, display);
 
+  if (filters.propertyType) {
+    chips.push({
+      key: "propertyType",
+      label: `ტიპი: ${PROPERTY_TYPES[filters.propertyType].label}`,
+      removeHref: href({ ...filters, propertyType: undefined }),
+    });
+  }
+
   const city = filters.citySlug ? findCityBySlug(filters.citySlug) : null;
   if (city) {
     chips.push({
@@ -82,9 +96,10 @@ export function getFilterChips(
   if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
     const min = filters.minPrice !== undefined ? formatMoney(filters.minPrice, display) : undefined;
     const max = filters.maxPrice !== undefined ? formatMoney(filters.maxPrice, display) : undefined;
+    const isRent = getTransaction(filters) === "rent";
     chips.push({
       key: "price",
-      label: `ბიუჯეტი: ${rangeLabel(min, max)}`,
+      label: isRent ? `ქირა: ${rangeLabel(min, max)} / თვე` : `ბიუჯეტი: ${rangeLabel(min, max)}`,
       removeHref: href({ ...filters, minPrice: undefined, maxPrice: undefined }),
     });
   }

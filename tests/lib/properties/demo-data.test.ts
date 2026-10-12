@@ -35,9 +35,10 @@ describe("demo data", () => {
     }
   });
 
-  it("uses positive whole numbers for optional rooms and floor when present", () => {
+  it("uses positive whole numbers for optional rooms, floor, and storeys when present", () => {
     for (const property of demoProperties) {
-      for (const value of [property.rooms, property.floor]) {
+      const typeSpecific = property.type === "apartment" ? property.floor : property.storeys;
+      for (const value of [property.rooms, typeSpecific]) {
         if (value !== undefined) {
           expect(Number.isInteger(value) && value > 0).toBe(true);
         }
@@ -50,7 +51,8 @@ describe("demo data", () => {
       if (property.bedrooms !== undefined) {
         expect(Number.isInteger(property.bedrooms) && property.bedrooms >= 0).toBe(true);
       }
-      for (const value of [property.bathrooms, property.totalFloors]) {
+      const totalFloors = property.type === "apartment" ? property.totalFloors : undefined;
+      for (const value of [property.bathrooms, totalFloors]) {
         if (value !== undefined) {
           expect(Number.isInteger(value) && value > 0).toBe(true);
         }
@@ -63,7 +65,11 @@ describe("demo data", () => {
       if (property.bedrooms !== undefined && property.rooms !== undefined) {
         expect(property.bedrooms).toBeLessThan(property.rooms);
       }
-      if (property.floor !== undefined && property.totalFloors !== undefined) {
+      if (
+        property.type === "apartment" &&
+        property.floor !== undefined &&
+        property.totalFloors !== undefined
+      ) {
         expect(property.floor).toBeLessThanOrEqual(property.totalFloors);
       }
     }
@@ -83,8 +89,8 @@ describe("demo data", () => {
     }
   });
 
-  it("has six demo listings in Tbilisi and Batumi", () => {
-    expect(demoListings).toHaveLength(6);
+  it("has eleven demo listings in Tbilisi and Batumi", () => {
+    expect(demoListings).toHaveLength(11);
     expect([...new Set(demoProperties.map((property) => property.city))].sort()).toEqual([
       "ბათუმი",
       "თბილისი",
@@ -103,6 +109,45 @@ describe("demo data", () => {
       expect(() =>
         calculateAskingPricePerSqm(listing.askingPrice.amount, property!.areaSqm),
       ).not.toThrow();
+    }
+  });
+
+  it("covers both property types and both transaction types", () => {
+    expect([...new Set(demoProperties.map((property) => property.type))].sort()).toEqual([
+      "apartment",
+      "house",
+    ]);
+    expect([...new Set(demoListings.map((listing) => listing.transactionType))].sort()).toEqual([
+      "rent",
+      "sale",
+    ]);
+  });
+
+  it("has rental listings in both currencies and for both property types", () => {
+    const rentals = demoListings.filter((listing) => listing.transactionType === "rent");
+    const currencies = new Set(rentals.map((listing) => listing.askingPrice.currency));
+    expect([...currencies].sort()).toEqual(["GEL", "USD"]);
+    const types = new Set(
+      rentals.map((listing) => demoProperties.find((item) => item.id === listing.propertyId)!.type),
+    );
+    expect([...types].sort()).toEqual(["apartment", "house"]);
+  });
+
+  it("gives every rental a monthly period", () => {
+    for (const listing of demoListings) {
+      if (listing.transactionType === "rent") {
+        expect(listing.rentPeriod).toBe("month");
+      }
+    }
+  });
+
+  it("never gives a house apartment-only facts", () => {
+    for (const property of demoProperties) {
+      if (property.type === "house") {
+        expect("floor" in property).toBe(false);
+        expect("totalFloors" in property).toBe(false);
+        expect(property.features?.elevator).toBeUndefined();
+      }
     }
   });
 });

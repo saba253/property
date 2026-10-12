@@ -4,7 +4,7 @@ import { ListingCard } from "@/components/properties/listing-card";
 import { buttonPrimary, buttonSecondary, pageContainer } from "@/components/ui/styles";
 import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
-import { getDisplayPrice } from "@/lib/pricing/display-price";
+import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 
@@ -77,12 +77,7 @@ export default async function Home() {
             <figure className="mx-auto w-full max-w-sm lg:max-w-md">
               <ListingCard
                 {...exampleListing}
-                price={getDisplayPrice(
-                  exampleListing.listing.askingPrice,
-                  exampleListing.property.areaSqm,
-                  DEFAULT_DISPLAY_CURRENCY,
-                  rateState,
-                )}
+                price={getListingDisplayPrice(exampleListing, DEFAULT_DISPLAY_CURRENCY, rateState)}
                 href={buildListingDetailHref(exampleListing.listing.id)}
               />
               <figcaption className="mt-4 flex items-center gap-2 px-1 text-sm text-muted">

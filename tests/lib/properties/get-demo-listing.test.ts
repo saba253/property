@@ -27,6 +27,11 @@ describe("getDemoListingIds", () => {
       "demo-listing-4",
       "demo-listing-5",
       "demo-listing-6",
+      "demo-listing-7",
+      "demo-listing-8",
+      "demo-listing-9",
+      "demo-listing-10",
+      "demo-listing-11",
     ]);
   });
 });
@@ -41,6 +46,11 @@ describe("getActiveDemoListingsWithProperties", () => {
       "demo-listing-4",
       "demo-listing-5",
       "demo-listing-6",
+      "demo-listing-7",
+      "demo-listing-8",
+      "demo-listing-9",
+      "demo-listing-10",
+      "demo-listing-11",
     ]);
   });
 

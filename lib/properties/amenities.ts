@@ -4,6 +4,7 @@ import type {
   AmenityStatus,
   ListingEquipmentKey,
   PropertyFeatureKey,
+  PropertyType,
 } from "@/lib/properties/types";
 
 export type AmenityGroup = "property" | "listing";
@@ -14,13 +15,16 @@ export type AmenityDefinition = {
   label: string;
   /** "property": building feature on Property. "listing": equipment included in the offer. */
   group: AmenityGroup;
+  /** Property types this amenity applies to. Omitted means every property type. */
+  appliesTo?: readonly PropertyType[];
 };
 
 /** All supported amenities, in display order. Add new ones here (and to the key types). */
 export const AMENITIES: readonly AmenityDefinition[] = [
   { key: "balcony", label: "აივანი", group: "property" },
   { key: "parking", label: "პარკინგი", group: "property" },
-  { key: "elevator", label: "ლიფტი", group: "property" },
+  // A private house has no shared elevator, so it is never shown or matched for houses.
+  { key: "elevator", label: "ლიფტი", group: "property", appliesTo: ["apartment"] },
   { key: "centralHeating", label: "ცენტრალური გათბობა", group: "property" },
   { key: "television", label: "ტელევიზორი", group: "listing" },
   { key: "bed", label: "საწოლი", group: "listing" },
@@ -31,7 +35,7 @@ export const AMENITIES: readonly AmenityDefinition[] = [
 ];
 
 export const AMENITY_GROUP_LABELS: Record<AmenityGroup, string> = {
-  property: "შენობა და ბინა",
+  property: "ქონების მახასიათებლები",
   listing: "ტექნიკა და ავეჯი",
 };
 
@@ -45,6 +49,11 @@ export function getAmenityDefinition(key: AmenityKey): AmenityDefinition {
   return AMENITIES.find((amenity) => amenity.key === key)!;
 }
 
+/** True when the amenity is relevant for the property type (for example, no elevator for houses). */
+export function amenityAppliesTo(amenity: AmenityDefinition, type: PropertyType): boolean {
+  return amenity.appliesTo === undefined || amenity.appliesTo.includes(type);
+}
+
 /** Status of one amenity for a listing. Missing information is "unknown", never "no". */
 export function getAmenityStatus(item: ListingWithProperty, key: AmenityKey): AmenityStatus {
   const definition = getAmenityDefinition(key);
@@ -55,21 +64,28 @@ export function getAmenityStatus(item: ListingWithProperty, key: AmenityKey): Am
   return status ?? "unknown";
 }
 
-/** AND matching: true only when every requested amenity is confirmed ("yes"). */
+/**
+ * AND matching: true only when every requested amenity applies to the property type and is
+ * confirmed ("yes").
+ */
 export function hasAllAmenities(item: ListingWithProperty, keys: readonly AmenityKey[]): boolean {
-  return keys.every((key) => getAmenityStatus(item, key) === "yes");
+  return keys.every(
+    (key) =>
+      amenityAppliesTo(getAmenityDefinition(key), item.property.type) &&
+      getAmenityStatus(item, key) === "yes",
+  );
 }
 
 export type AmenitiesByStatus = Record<AmenityStatus, AmenityDefinition[]>;
 
-/** Amenities of one group, split by status, each list in display order. */
+/** Applicable amenities of one group, split by status, each list in display order. */
 export function groupAmenitiesByStatus(
   item: ListingWithProperty,
   group: AmenityGroup,
 ): AmenitiesByStatus {
   const result: AmenitiesByStatus = { yes: [], no: [], unknown: [] };
   for (const amenity of AMENITIES) {
-    if (amenity.group === group) {
+    if (amenity.group === group && amenityAppliesTo(amenity, item.property.type)) {
       result[getAmenityStatus(item, amenity.key)].push(amenity);
     }
   }

@@ -4,7 +4,9 @@ import {
   roundToWholeUnits,
 } from "@/lib/currency/exchange-rate";
 import { calculateAskingPricePerSqm } from "@/lib/pricing/price-per-sqm";
-import type { Currency, Money } from "@/lib/properties/types";
+import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
+import { getPricePeriod } from "@/lib/properties/listing-types";
+import type { Currency, Money, RentPeriod } from "@/lib/properties/types";
 
 /**
  * A listing's price as shown to the user in the chosen display currency.
@@ -21,10 +23,15 @@ export type DisplayPrice = {
   pricePerSqm: number | null;
   /** True when `amount` was converted from another currency and is approximate. */
   isConverted: boolean;
+  /**
+   * null for a sale price; "month" for monthly rent. Conversion never changes the period, and
+   * price per m² refers to the same period.
+   */
+  period: RentPeriod | null;
 };
 
 /**
- * Builds the display price for one listing. Filtering compares the same `amount`, so a price a
+ * Builds the display price for one price. Filtering compares the same `amount`, so a price a
  * user sees always agrees with whether the listing matched their budget.
  */
 export function getDisplayPrice(
@@ -32,6 +39,7 @@ export function getDisplayPrice(
   areaSqm: number,
   currency: Currency,
   rateState: ExchangeRateState,
+  period: RentPeriod | null = null,
 ): DisplayPrice {
   if (original.currency === currency) {
     return {
@@ -40,11 +48,12 @@ export function getDisplayPrice(
       amount: original.amount,
       pricePerSqm: calculateAskingPricePerSqm(original.amount, areaSqm),
       isConverted: false,
+      period,
     };
   }
 
   if (rateState.status !== "available") {
-    return { original, currency, amount: null, pricePerSqm: null, isConverted: false };
+    return { original, currency, amount: null, pricePerSqm: null, isConverted: false, period };
   }
 
   const amount = roundToWholeUnits(
@@ -56,5 +65,21 @@ export function getDisplayPrice(
     amount,
     pricePerSqm: amount > 0 ? calculateAskingPricePerSqm(amount, areaSqm) : null,
     isConverted: true,
+    period,
   };
+}
+
+/** Display price for a listing, with the price period taken from its transaction type. */
+export function getListingDisplayPrice(
+  { listing, property }: ListingWithProperty,
+  currency: Currency,
+  rateState: ExchangeRateState,
+): DisplayPrice {
+  return getDisplayPrice(
+    listing.askingPrice,
+    property.areaSqm,
+    currency,
+    rateState,
+    getPricePeriod(listing),
+  );
 }

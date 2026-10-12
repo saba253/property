@@ -12,10 +12,18 @@ export function PricePerSqmChip({ text }: { text: string }) {
 }
 
 /** Highlighted panel for the detail page: our signature decision-support figure. */
-export function PricePerSqmCallout({ text, note }: { text: string; note: string }) {
+export function PricePerSqmCallout({
+  title,
+  text,
+  note,
+}: {
+  title: string;
+  text: string;
+  note: string;
+}) {
   return (
     <div className="rounded-2xl bg-accent-50 p-4 ring-1 ring-accent-100">
-      <p className="text-sm font-medium text-navy">მითითებული ფასი კვადრატულ მეტრზე</p>
+      <p className="text-sm font-medium text-navy">{title}</p>
       <p className="mt-1 text-2xl font-bold text-accent-700">{text}</p>
       <p className="mt-1 text-xs text-muted">{note}</p>
     </div>

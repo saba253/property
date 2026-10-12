@@ -10,11 +10,12 @@ import {
   formatDisplayAmount,
   formatDisplayPricePerSqm,
   originalPriceNote,
+  periodSuffix,
 } from "@/lib/pricing/format-display-price";
 import { formatArea, formatMoney, formatPricePerSqm } from "@/lib/pricing/format-money";
 import { buildListingDetailHref, buildListingsHref } from "@/lib/properties/filter-chips";
 import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
-import type { Currency } from "@/lib/properties/types";
+import type { Currency, TransactionType } from "@/lib/properties/types";
 
 /*
  * The detail page is fully static (so unknown ids can return HTTP 404), which means the server
@@ -43,7 +44,9 @@ export function DetailPriceSummaryView({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">განცხადებაში მითითებული ფასი</p>
+        <p className="text-sm text-muted">
+          {price.period === null ? "განცხადებაში მითითებული ფასი" : "თვიური ქირა"}
+        </p>
         <CurrencyToggle
           current={display}
           hrefFor={{
@@ -58,6 +61,11 @@ export function DetailPriceSummaryView({
       {pricePerSqm && (
         <div className="mt-5">
           <PricePerSqmCallout
+            title={
+              price.period === null
+                ? "მითითებული ფასი კვადრატულ მეტრზე"
+                : "თვიური ქირა კვადრატულ მეტრზე"
+            }
             text={pricePerSqm}
             note={
               price.isConverted
@@ -68,7 +76,13 @@ export function DetailPriceSummaryView({
         </div>
       )}
 
-      <Link href={buildListingsHref({}, display)} className={`${buttonSecondary} mt-5 w-full`}>
+      <Link
+        href={buildListingsHref(
+          { transaction: price.period === null ? undefined : "rent" },
+          display,
+        )}
+        className={`${buttonSecondary} mt-5 w-full`}
+      >
         სხვა დემო განცხადებები
       </Link>
     </>
@@ -94,11 +108,11 @@ export function DetailPriceFormulaView({
     price.amount !== null && price.pricePerSqm !== null
       ? {
           amount: formatDisplayAmount(price),
-          result: formatPricePerSqm(price.pricePerSqm, display),
+          result: `${formatPricePerSqm(price.pricePerSqm, display)}${periodSuffix(price.period)}`,
         }
       : {
           amount: formatMoney(original.amount, original.currency),
-          result: formatPricePerSqm(sameCurrency.pricePerSqm ?? 0, original.currency),
+          result: `${formatPricePerSqm(sameCurrency.pricePerSqm ?? 0, original.currency)}${periodSuffix(price.period)}`,
         };
 
   return (
@@ -122,10 +136,21 @@ export function DetailPriceFormula(props: FormulaProps) {
   return <DetailPriceFormulaView {...props} display={useDisplayCurrency()} />;
 }
 
-export function BackToListingsLinkView({ display }: { display: Currency }) {
+export function BackToListingsLinkView({
+  display,
+  transaction,
+}: {
+  display: Currency;
+  transaction: TransactionType;
+}) {
+  // Rental listings link back to the For Rent tab.
+  const href = buildListingsHref(
+    { transaction: transaction === "rent" ? "rent" : undefined },
+    display,
+  );
   return (
     <Link
-      href={buildListingsHref({}, display)}
+      href={href}
       className="inline-flex items-center gap-1 rounded-full text-sm font-medium text-muted hover:text-ink"
     >
       ← დემო განცხადებები
@@ -133,6 +158,6 @@ export function BackToListingsLinkView({ display }: { display: Currency }) {
   );
 }
 
-export function BackToListingsLink() {
-  return <BackToListingsLinkView display={useDisplayCurrency()} />;
+export function BackToListingsLink({ transaction }: { transaction: TransactionType }) {
+  return <BackToListingsLinkView display={useDisplayCurrency()} transaction={transaction} />;
 }
