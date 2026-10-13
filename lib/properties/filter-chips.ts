@@ -8,6 +8,7 @@ import {
   MAX_ROOMS_FILTER,
   getTransaction,
 } from "@/lib/properties/listing-filters";
+import type { SortOption } from "@/lib/properties/listing-sort";
 import { DEFAULT_LISTINGS_VIEW, type ListingsView } from "@/lib/properties/listings-view";
 import type { AmenityKey, Currency } from "@/lib/properties/types";
 
@@ -33,16 +34,19 @@ export type FilterChip = {
 
 /**
  * Builds a canonical `/properties` URL. Unset filters are left out, and so are the display
- * currency and the view when they are the defaults (USD, list), to keep shared links short.
+ * currency, the view and the sort order when they are the defaults (USD, list, default order),
+ * to keep shared links short.
  */
 export function buildListingsHref(
   filters: ListingFilters,
   display: Currency = DEFAULT_DISPLAY_CURRENCY,
   view: ListingsView = DEFAULT_LISTINGS_VIEW,
+  sort: SortOption = "default",
 ): string {
   const params = new URLSearchParams();
   if (display !== DEFAULT_DISPLAY_CURRENCY) params.set("display", display);
   if (view !== DEFAULT_LISTINGS_VIEW) params.set("view", view);
+  if (sort !== "default") params.set("sort", sort);
   if (filters.transaction && filters.transaction !== "sale") {
     params.set("transaction", filters.transaction);
   }
@@ -73,15 +77,16 @@ function rangeLabel(min: string | undefined, max: string | undefined): string {
 
 /**
  * Chips for the filters that are applied, in a fixed order. Removing a chip keeps the display
- * currency and the view (list or map).
+ * currency, the view (list or map) and the sort order.
  */
 export function getFilterChips(
   filters: ListingFilters,
   display: Currency = DEFAULT_DISPLAY_CURRENCY,
   view: ListingsView = DEFAULT_LISTINGS_VIEW,
+  sort: SortOption = "default",
 ): FilterChip[] {
   const chips: FilterChip[] = [];
-  const href = (next: ListingFilters) => buildListingsHref(next, display, view);
+  const href = (next: ListingFilters) => buildListingsHref(next, display, view, sort);
 
   if (filters.propertyType) {
     chips.push({

@@ -19,6 +19,7 @@ import {
   PROPERTY_TYPE_ORDER,
   isPropertyType,
 } from "@/lib/properties/listing-types";
+import type { SortOption } from "@/lib/properties/listing-sort";
 import type { ListingsView } from "@/lib/properties/listings-view";
 import type { Currency, PropertyType, TransactionType } from "@/lib/properties/types";
 
@@ -47,6 +48,8 @@ type ListingFiltersFormProps = {
   resetHref: string;
   /** Kept on submit, so filtering in the map view stays in the map view. */
   view: ListingsView;
+  /** Kept on submit, so changing filters keeps the chosen sort order. */
+  sort: SortOption;
 };
 
 function NumberInput({
@@ -202,6 +205,7 @@ export function ListingFiltersForm({
   showReset,
   resetHref,
   view,
+  sort,
 }: ListingFiltersFormProps) {
   const symbol = display === "USD" ? "$" : "₾";
   const selectedAmenities = new Set(values.amenities);
@@ -215,6 +219,7 @@ export function ListingFiltersForm({
       <input type="hidden" name="display" value={display} />
       {isRent && <input type="hidden" name="transaction" value="rent" />}
       {view === "map" && <input type="hidden" name="view" value="map" />}
+      {sort !== "default" && <input type="hidden" name="sort" value={sort} />}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1.2fr_1.5fr_1.5fr_auto] lg:items-end">
         <div>
           <label htmlFor="filter-type" className={fieldLabel}>

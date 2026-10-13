@@ -9,6 +9,7 @@ import { DemoDisclosure } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import { TransactionTabs } from "@/components/properties/transaction-tabs";
 import { SearchFeedback } from "@/components/search/search-feedback";
+import { SortMenu } from "@/components/properties/sort-menu";
 import {
   ListingFiltersForm,
   type ListingFilterFormValues,
@@ -45,6 +46,12 @@ import {
   parseNonNegativeNumber,
   switchTransaction,
 } from "@/lib/properties/listing-filters";
+import {
+  SORT_OPTIONS,
+  type SortOption,
+  parseSort,
+  sortListings,
+} from "@/lib/properties/listing-sort";
 import { type ListingsView, parseListingsView } from "@/lib/properties/listings-view";
 import type { Currency, TransactionType } from "@/lib/properties/types";
 
@@ -156,25 +163,42 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   const parsed = parseListingFilters(query, { knownDistricts: districts });
   // List or map; legacy URLs without `view` keep the list. Every link below keeps the view.
   const { view, invalid: invalidView } = parseListingsView(rawQuery);
+  // Sorting is a view setting like the display currency: every link below keeps it.
+  const { sort, invalid: invalidSort } = parseSort(rawQuery);
   const { filters, display } = parsed;
-  const { matches, notComparableCount } = filterListings(allItems, filters, display, rateState);
+  const { matches: filtered, notComparableCount } = filterListings(
+    allItems,
+    filters,
+    display,
+    rateState,
+  );
+  // Filter first, then sort (same rate snapshot); list and map both show this order.
+  const sorted = sortListings(filtered, sort, rateState);
+  const matches = sorted.items;
   const values = toFormValues(query, parsed);
   const filtersActive = hasActiveFilters(filters);
-  const chips = getFilterChips(filters, display, view);
+  const chips = getFilterChips(filters, display, view, sort);
   const otherCurrency: Currency = display === "USD" ? "GEL" : "USD";
   const otherHref = buildListingsHref(
     convertBudgetForDisplay(filters, display, otherCurrency, rateState),
     otherCurrency,
     view,
+    sort,
   );
   const toggleHrefs: Record<Currency, string> =
     display === "USD"
-      ? { USD: buildListingsHref(filters, "USD", view), GEL: otherHref }
-      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL", view) };
+      ? { USD: buildListingsHref(filters, "USD", view, sort), GEL: otherHref }
+      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL", view, sort) };
   const viewHrefs: Record<ListingsView, string> = {
-    list: buildListingsHref(filters, display, "list"),
-    map: buildListingsHref(filters, display, "map"),
+    list: buildListingsHref(filters, display, "list", sort),
+    map: buildListingsHref(filters, display, "map", sort),
   };
+  const sortHrefs = Object.fromEntries(
+    SORT_OPTIONS.map((option) => [
+      option.value,
+      buildListingsHref(filters, display, view, option.value),
+    ]),
+  ) as Record<SortOption, string>;
   const resultsIncomplete = notComparableCount > 0;
   const transaction = getTransaction(filters);
   // "Total" counts only listings of the chosen transaction type (sale and rent are separate).
@@ -183,11 +207,12 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   ).length;
   // Switching sale/rent keeps compatible filters but drops the budget (see switchTransaction).
   const transactionHrefs: Record<TransactionType, string> = {
-    sale: buildListingsHref(switchTransaction(filters, "sale"), display, view),
-    rent: buildListingsHref(switchTransaction(filters, "rent"), display, view),
+    sale: buildListingsHref(switchTransaction(filters, "sale"), display, view, sort),
+    rent: buildListingsHref(switchTransaction(filters, "rent"), display, view, sort),
   };
-  // Reset clears filters but keeps the chosen sale/rent tab, display currency and view.
-  const resetHref = buildListingsHref({ transaction: filters.transaction }, display, view);
+  // Reset clears filters but keeps the view settings: sale/rent tab, display currency, list/map
+  // view and sort order. The sort menu has its own "ნაგულისხმევი" option.
+  const resetHref = buildListingsHref({ transaction: filters.transaction }, display, view, sort);
   const cardData = (item: (typeof matches)[number]) => ({
     price: getListingDisplayPrice(item, display, rateState),
     href: buildListingDetailHref(item.listing.id, display),
@@ -218,16 +243,20 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
             showReset={filtersActive || parsed.issues.length > 0}
             resetHref={resetHref}
             view={view}
+            sort={sort}
           />
 
           {search && <SearchFeedback query={searchText} search={search} />}
 
-          {(parsed.issues.length > 0 || invalidView) && (
+          {(parsed.issues.length > 0 || invalidView || invalidSort) && (
             <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
               {parsed.issues.map((issue, index) => (
                 <li key={index}>{issueMessage(issue)}</li>
               ))}
               {invalidView && <li>მითითებული ხედი არასწორია, ამიტომ შედეგები ნაჩვენებია სიით.</li>}
+              {invalidSort && (
+                <li>მითითებული დალაგება არასწორია, ამიტომ ნაჩვენებია ნაგულისხმევი რიგი.</li>
+              )}
             </ul>
           )}
 
@@ -261,7 +290,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-base font-semibold text-ink">
             ნაპოვნია {matches.length} განცხადება
             {filtersActive ? (
@@ -271,26 +300,40 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
               <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
             ) : null}
           </p>
-
-          {chips.length > 0 && (
-            <ul aria-label="არჩეული ფილტრები" className="flex flex-wrap gap-2">
-              {chips.map((chip) => (
-                <li key={chip.key}>
-                  <Link
-                    href={chip.removeHref}
-                    aria-label={`${chip.label} — ფილტრის მოხსნა`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface py-1.5 pr-2.5 pl-3 text-sm text-ink transition-colors hover:border-ink"
-                  >
-                    {chip.label}
-                    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-muted">
-                      <path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" />
-                    </svg>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {matches.length > 1 && (
+            // The key closes the menu after a sort link was followed.
+            <SortMenu key={sort} current={sort} hrefFor={sortHrefs} />
           )}
         </div>
+
+        {sorted.notice === "rate-unavailable" && (
+          <p
+            role="note"
+            className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          >
+            გაცვლითი კურსი მიუწვდომელია, ამიტომ USD-სა და GEL-ში მითითებული ფასები ერთმანეთს ვერ
+            შედარდება. ფასით დალაგების ნაცვლად ნაჩვენებია ნაგულისხმევი რიგი.
+          </p>
+        )}
+
+        {chips.length > 0 && (
+          <ul aria-label="არჩეული ფილტრები" className="mt-3 flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <li key={chip.key}>
+                <Link
+                  href={chip.removeHref}
+                  aria-label={`${chip.label} — ფილტრის მოხსნა`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface py-1.5 pr-2.5 pl-3 text-sm text-ink transition-colors hover:border-ink"
+                >
+                  {chip.label}
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 fill-muted">
+                    <path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" />
+                  </svg>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {matches.length > 0 && view === "map" ? (
           <div className="mt-5">
