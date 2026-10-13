@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { RateNotice } from "@/components/currency/rate-notice";
+import { FavoriteButton } from "@/components/favorites/favorite-button";
 import { ListingGallery } from "@/components/gallery/listing-gallery";
 import { DemoBadge, DemoNotice } from "@/components/properties/demo-label";
 import {
@@ -111,6 +112,12 @@ export default async function PropertyDetailPage({ params }: PageProps) {
             <span className="inline-flex items-center rounded-full bg-cream px-2.5 py-1 text-xs font-semibold text-navy ring-1 ring-line">
               {PROPERTY_TYPES[property.type].label}
             </span>
+            <FavoriteButton
+              listingId={listing.id}
+              title={listing.title}
+              variant="inline"
+              className="ml-auto"
+            />
           </div>
           <h1 className="mt-3 text-2xl font-bold tracking-tight text-navy sm:text-4xl">
             {listing.title}

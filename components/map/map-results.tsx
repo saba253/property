@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
+import { FavoriteButton } from "@/components/favorites/favorite-button";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { PRECISION_LABELS } from "@/lib/geo/location";
 import {
@@ -107,17 +108,20 @@ function ResultRow({
         <span className="min-w-0 truncate text-xs text-muted">
           {listing.place} · <PrecisionNote listing={listing} />
         </span>
-        {key && (
-          <button
-            type="button"
-            onClick={() => onShowOnMap(key)}
-            aria-label={`რუქაზე ჩვენება: ${listing.title}`}
-            className="inline-flex h-8 items-center gap-1 rounded-full border border-line-strong px-3 text-xs font-semibold text-navy transition-colors hover:border-navy"
-          >
-            <PinIcon />
-            რუქაზე
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {key && (
+            <button
+              type="button"
+              onClick={() => onShowOnMap(key)}
+              aria-label={`რუქაზე ჩვენება: ${listing.title}`}
+              className="inline-flex h-9 items-center gap-1 rounded-full border border-line-strong px-3 text-xs font-semibold text-navy transition-colors hover:border-navy"
+            >
+              <PinIcon />
+              რუქაზე
+            </button>
+          )}
+          <FavoriteButton listingId={listing.id} title={listing.title} variant="compact" />
+        </div>
       </div>
     </li>
   );
@@ -181,10 +185,10 @@ function MarkerPreview({
       </div>
       <ul className="divide-y divide-line overflow-y-auto">
         {listings.map((listing) => (
-          <li key={listing.id}>
+          <li key={listing.id} className="relative">
             <Link
               href={listing.href}
-              className="flex gap-3 px-4 py-3 transition-colors hover:bg-cream/70"
+              className="flex gap-3 py-3 pr-14 pl-4 transition-colors hover:bg-cream/70"
             >
               <div className="relative shrink-0">
                 <ListingThumb listing={listing} className="h-16 w-24 rounded-lg" />
@@ -202,6 +206,13 @@ function MarkerPreview({
                 <p className="mt-1 text-xs font-semibold text-accent-700">განცხადების ნახვა →</p>
               </div>
             </Link>
+            {/* Next to the link, not inside it: saving never opens the listing. */}
+            <FavoriteButton
+              listingId={listing.id}
+              title={listing.title}
+              variant="compact"
+              className="absolute top-3 right-3"
+            />
           </li>
         ))}
       </ul>
