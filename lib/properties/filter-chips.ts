@@ -8,6 +8,7 @@ import {
   MAX_ROOMS_FILTER,
   getTransaction,
 } from "@/lib/properties/listing-filters";
+import { DEFAULT_LISTINGS_VIEW, type ListingsView } from "@/lib/properties/listings-view";
 import type { AmenityKey, Currency } from "@/lib/properties/types";
 
 const LISTINGS_PATH = "/properties";
@@ -31,15 +32,17 @@ export type FilterChip = {
 };
 
 /**
- * Builds a canonical `/properties` URL. Unset filters are left out, and so is the display
- * currency when it is the default (USD), to keep shared links short.
+ * Builds a canonical `/properties` URL. Unset filters are left out, and so are the display
+ * currency and the view when they are the defaults (USD, list), to keep shared links short.
  */
 export function buildListingsHref(
   filters: ListingFilters,
   display: Currency = DEFAULT_DISPLAY_CURRENCY,
+  view: ListingsView = DEFAULT_LISTINGS_VIEW,
 ): string {
   const params = new URLSearchParams();
   if (display !== DEFAULT_DISPLAY_CURRENCY) params.set("display", display);
+  if (view !== DEFAULT_LISTINGS_VIEW) params.set("view", view);
   if (filters.transaction && filters.transaction !== "sale") {
     params.set("transaction", filters.transaction);
   }
@@ -68,13 +71,17 @@ function rangeLabel(min: string | undefined, max: string | undefined): string {
   return `${max}-მდე`;
 }
 
-/** Chips for the filters that are applied, in a fixed order. Removing a chip keeps the display currency. */
+/**
+ * Chips for the filters that are applied, in a fixed order. Removing a chip keeps the display
+ * currency and the view (list or map).
+ */
 export function getFilterChips(
   filters: ListingFilters,
   display: Currency = DEFAULT_DISPLAY_CURRENCY,
+  view: ListingsView = DEFAULT_LISTINGS_VIEW,
 ): FilterChip[] {
   const chips: FilterChip[] = [];
-  const href = (next: ListingFilters) => buildListingsHref(next, display);
+  const href = (next: ListingFilters) => buildListingsHref(next, display, view);
 
   if (filters.propertyType) {
     chips.push({
@@ -89,7 +96,8 @@ export function getFilterChips(
     chips.push({
       key: "city",
       label: `ქალაქი: ${city.name}`,
-      removeHref: href({ ...filters, citySlug: undefined }),
+      // The district belongs to the city, so removing the city removes the district too.
+      removeHref: href({ ...filters, citySlug: undefined, district: undefined }),
     });
   }
 

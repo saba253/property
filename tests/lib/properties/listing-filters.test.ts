@@ -629,6 +629,8 @@ describe("rooms and district filters", () => {
 
   it("filters by district and counts rooms and district as advanced filters", () => {
     expect(run({ district: "ვაკე" })).toEqual(["one", "two"]);
-    expect(countAdvancedFilters({ rooms: 2, district: "ვაკე" })).toBe(2);
+    // District sits next to the city in the main row; original currency is in "more filters".
+    expect(countAdvancedFilters({ rooms: 2, district: "ვაკე" })).toBe(1);
+    expect(countAdvancedFilters({ rooms: 2, originalCurrency: "GEL" })).toBe(2);
   });
 });

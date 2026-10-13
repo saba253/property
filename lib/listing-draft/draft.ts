@@ -4,6 +4,7 @@ import {
   amenityAppliesTo,
   getTopFloorStatus,
 } from "@/lib/properties/amenities";
+import { locationFromDistrict } from "@/lib/geo/location";
 import { findCityBySlug } from "@/lib/properties/cities";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import { parseNonNegativeNumber } from "@/lib/properties/listing-filters";
@@ -444,6 +445,8 @@ export function buildDraftListing(draft: ListingDraft): ListingWithProperty | nu
     id: DRAFT_PROPERTY_ID,
     city: city.name,
     district: draft.district.trim(),
+    // Area level at most: the form never asks for an address or coordinates.
+    location: locationFromDistrict(city.name, draft.district),
     areaSqm: readDraftNumber(draft, "areaSqm")!,
     rooms: readDraftNumber(draft, "rooms"),
     bedrooms: readDraftNumber(draft, "bedrooms"),

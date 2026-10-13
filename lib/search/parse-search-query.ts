@@ -32,7 +32,9 @@ export type SearchNote =
   | { code: "currency-assumed"; currency: Currency }
   | { code: "number-without-meaning"; text: string }
   | { code: "conflict"; kind: RecognizedTermKind }
-  | { code: "rooms-capped" };
+  | { code: "rooms-capped" }
+  /** A district name used in more than one city, without a city to tell them apart. */
+  | { code: "ambiguous-district"; name: string };
 
 export type ParsedSearch = {
   /** URL parameters for the listings page (same names the filter form uses). */
@@ -80,6 +82,15 @@ const STOP_WORDS = new Set([
   "ქალაქში",
   "უბანი",
   "უბანში",
+  "უბნის",
+  "უბნებში",
+  "რაიონი",
+  "რაიონში",
+  "რაიონის",
+  "მიდამოებში",
+  "ახლოს",
+  "მახლობლად",
+  "ქალაქის",
 ]);
 
 const APARTMENT_WORD = /^ბინ(ა|ის|ები|ებს|ას|აში|ებში|ისთვის)$/;
@@ -114,9 +125,12 @@ function formatAmount(amount: number, currency: Currency): string {
   return `${symbol}${new Intl.NumberFormat("en-US").format(amount)}`;
 }
 
-/** Stem used to match inflected forms: "ბათუმი" -> "ბათუმ" matches "ბათუმში". */
+/**
+ * Stem used to match inflected forms: "ბათუმი" -> "ბათუმ" matches "ბათუმში"; "ვაკე" -> "ვაკ"
+ * matches "ვაკეში" and the genitive "ვაკის". Short names keep at least three letters.
+ */
 function stem(word: string): string {
-  return word.length > 4 && word.endsWith("ი") ? word.slice(0, -1) : word;
+  return word.length >= 4 && /[იე]$/.test(word) ? word.slice(0, -1) : word;
 }
 
 function matchesPlace(tokens: readonly string[], start: number, name: string): number {
@@ -270,10 +284,23 @@ export function parseSearchQuery(text: string, context: SearchContext): ParsedSe
   const params: Record<string, string> = {};
   const recognized: RecognizedTerm[] = [];
 
+  // A district name used in several cities is applied only when the text also names one of
+  // those cities; otherwise it is reported as ambiguous instead of guessing.
+  const slugOfCity = (cityName: string) =>
+    context.cities.find((item) => item.name === cityName)?.slug;
+  let district: SearchDistrict | null = null;
   if (districts.size === 1) {
     const [name] = districts;
-    const district = context.districts.find((item) => item.name === name)!;
-    const city = context.cities.find((item) => item.name === district.city);
+    const candidates = context.districts.filter((item) => item.name === name);
+    const inNamedCity = candidates.filter((item) => cities.has(slugOfCity(item.city) ?? ""));
+    district =
+      candidates.length === 1 ? candidates[0] : inNamedCity.length === 1 ? inNamedCity[0] : null;
+    if (!district) notes.push({ code: "ambiguous-district", name });
+  }
+
+  if (district) {
+    const { name, city: cityName } = district;
+    const city = context.cities.find((item) => item.name === cityName);
     const otherCity = [...cities].some((slug) => slug !== city?.slug);
     if (otherCity) {
       notes.push({ code: "conflict", kind: "district" });

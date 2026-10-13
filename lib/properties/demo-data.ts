@@ -1,7 +1,8 @@
 import type { Listing, Property } from "@/lib/properties/types";
 
 // DEMO DATA ONLY. These are invented examples, not real properties or real listings.
-// Districts are general areas only; there are no addresses. Missing amenity keys and missing
+// Districts are general areas only; there are no addresses. Map locations are area-level
+// (approximate) at most, never a building; demo data never has exact coordinates. Missing amenity keys and missing
 // optional facts are deliberate: they show how unknown information is handled.
 
 export const demoProperties: readonly Property[] = [
@@ -10,6 +11,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "თბილისი",
     district: "ვაკე",
+    location: { precision: "approximate", areaId: "tbilisi-vake" },
     areaSqm: 65,
     rooms: 3,
     bedrooms: 2,
@@ -31,6 +33,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "ბათუმი",
     district: "ძველი ბათუმი",
+    location: { precision: "approximate", areaId: "batumi-old-batumi" },
     areaSqm: 48.5,
     rooms: 2,
     bedrooms: 1,
@@ -52,6 +55,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "თბილისი",
     district: "საბურთალო",
+    location: { precision: "approximate", areaId: "tbilisi-saburtalo" },
     areaSqm: 92,
     rooms: 4,
     bedrooms: 3,
@@ -75,6 +79,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "თბილისი",
     district: "ისანი",
+    location: { precision: "approximate", areaId: "tbilisi-isani" },
     areaSqm: 54,
     rooms: 2,
     bedrooms: 1,
@@ -88,6 +93,8 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "ბათუმი",
     district: "ახალი ბულვარი",
+    // No trustworthy reference point for this area: no map pin (see lib/geo/area-reference.ts).
+    location: { precision: "unknown" },
     areaSqm: 38,
     rooms: 1,
     bedrooms: 0,
@@ -109,6 +116,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "ბათუმი",
     district: "ბონი-გოროდოკი",
+    location: { precision: "approximate", areaId: "batumi-boni-gorodok" },
     areaSqm: 110,
     rooms: 4,
     bedrooms: 3,
@@ -131,6 +139,7 @@ export const demoProperties: readonly Property[] = [
     type: "house",
     city: "თბილისი",
     district: "დიღომი",
+    location: { precision: "approximate", areaId: "tbilisi-dighomi" },
     areaSqm: 180,
     landAreaSqm: 400,
     rooms: 5,
@@ -153,6 +162,8 @@ export const demoProperties: readonly Property[] = [
     type: "house",
     city: "ბათუმი",
     district: "აეროპორტის დასახლება",
+    // No trustworthy reference point for this area: no map pin (see lib/geo/area-reference.ts).
+    location: { precision: "unknown" },
     areaSqm: 140,
     rooms: 4,
     bedrooms: 3,
@@ -166,6 +177,7 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "თბილისი",
     district: "ვაკე",
+    location: { precision: "approximate", areaId: "tbilisi-vake" },
     areaSqm: 70,
     rooms: 3,
     bedrooms: 2,
@@ -186,6 +198,8 @@ export const demoProperties: readonly Property[] = [
     type: "apartment",
     city: "ბათუმი",
     district: "ახალი ბულვარი",
+    // No trustworthy reference point for this area: no map pin (see lib/geo/area-reference.ts).
+    location: { precision: "unknown" },
     areaSqm: 45,
     rooms: 2,
     bedrooms: 1,
@@ -200,6 +214,7 @@ export const demoProperties: readonly Property[] = [
     type: "house",
     city: "თბილისი",
     district: "წყნეთი",
+    location: { precision: "approximate", areaId: "tbilisi-tskneti" },
     areaSqm: 220,
     landAreaSqm: 800,
     rooms: 6,

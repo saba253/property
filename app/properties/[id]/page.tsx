@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { RateNotice } from "@/components/currency/rate-notice";
@@ -17,6 +18,9 @@ import { AmenityList } from "@/components/properties/amenity-list";
 import { type Fact, FactList } from "@/components/properties/fact-list";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { describeLocationPrecision, resolveMapPosition } from "@/lib/geo/location";
+import { knownCities } from "@/lib/properties/cities";
+import { buildListingsHref } from "@/lib/properties/filter-chips";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import {
   getDemoListingIds,
@@ -62,6 +66,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
   const { listing, property } = data;
   const images = getDemoListingImages(listing.id);
+  const mapPosition = resolveMapPosition(property);
   const { currency } = listing.askingPrice;
   // One rate snapshot; both currencies are prepared so the client can switch without a fetch.
   const rateState = await getExchangeRateState();
@@ -112,6 +117,25 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           </h1>
           <p className="mt-2 text-lg text-muted">
             {property.city}, {property.district}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+            <span>{describeLocationPrecision(mapPosition?.precision ?? "unknown")}</span>
+            {mapPosition && (
+              <Link
+                href={buildListingsHref(
+                  {
+                    transaction: listing.transactionType === "rent" ? "rent" : undefined,
+                    citySlug: knownCities.find((city) => city.name === property.city)?.slug,
+                    district: property.district,
+                  },
+                  "USD",
+                  "map",
+                )}
+                className="font-semibold text-accent-700 underline-offset-4 hover:underline"
+              >
+                უბანი რუქაზე →
+              </Link>
+            )}
           </p>
 
           <section aria-labelledby="facts-heading" className="mt-8">

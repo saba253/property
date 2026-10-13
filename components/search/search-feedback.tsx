@@ -20,6 +20,8 @@ function noteMessage(note: SearchNote): string {
       return `${KIND_LABELS[note.kind]} რამდენჯერმე, განსხვავებულად იყო მითითებული, ამიტომ არ გამოიყენება.`;
     case "rooms-capped":
       return "5-ზე მეტი ოთახი აღქმულია როგორც „5+ ოთახი“.";
+    case "ambiguous-district":
+      return `უბანი „${note.name}“ რამდენიმე ქალაქშია, ამიტომ არ გამოიყენება. მიუთითეთ ქალაქიც.`;
   }
 }
 

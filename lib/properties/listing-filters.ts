@@ -12,7 +12,7 @@ import {
   isAmenityKey,
   normalizeAmenityKeys,
 } from "@/lib/properties/amenities";
-import { findCityBySlug } from "@/lib/properties/cities";
+import { type DistrictOption, findCityBySlug } from "@/lib/properties/cities";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import {
   DEFAULT_TRANSACTION_TYPE,
@@ -77,6 +77,8 @@ export type FilterIssue =
   | { code: "invalid-display-currency" }
   | { code: "invalid-number"; field: NumericFilterKey | CountFilterKey | "rooms" }
   | { code: "invalid-district" }
+  | { code: "district-not-in-city" }
+  | { code: "ambiguous-district" }
   | { code: "invalid-amenity" }
   | { code: "invalid-transaction" }
   | { code: "invalid-property-type" }
@@ -164,10 +166,31 @@ export const MAX_ROOMS_FILTER = 5;
 export type ParseListingFiltersOptions = {
   /**
    * Districts present in the listing data. When given, an unknown `district` is dropped
-   * with a notice; there is no hardcoded district directory.
+   * with a notice; there is no hardcoded district directory. With city names (DistrictOption),
+   * a district that is not in the chosen city, or a name used in several cities without a
+   * chosen city, is also dropped with a notice instead of being guessed.
    */
-  knownDistricts?: readonly string[];
+  knownDistricts?: readonly (string | DistrictOption)[];
 };
+
+/** Why a `district` value cannot be applied, or null when it can. */
+function checkDistrict(
+  district: string,
+  citySlug: string | undefined,
+  knownDistricts: ParseListingFiltersOptions["knownDistricts"],
+): FilterIssue | null {
+  if (!knownDistricts) return null;
+  const matches = knownDistricts
+    .map((item) => (typeof item === "string" ? { name: item, city: null } : item))
+    .filter((item) => item.name === district);
+  if (matches.length === 0) return { code: "invalid-district" };
+  const cityName = citySlug ? findCityBySlug(citySlug)?.name : undefined;
+  const cities = new Set(matches.map((item) => item.city).filter((city) => city !== null));
+  if (cityName) {
+    return cities.size === 0 || cities.has(cityName) ? null : { code: "district-not-in-city" };
+  }
+  return cities.size > 1 ? { code: "ambiguous-district" } : null;
+}
 
 export function parseListingFilters(
   query: RawQuery,
@@ -195,15 +218,6 @@ export function parseListingFilters(
     }
   }
 
-  const district = readParam(query, "district");
-  if (district) {
-    if (options.knownDistricts && !options.knownDistricts.includes(district)) {
-      issues.push({ code: "invalid-district" });
-    } else {
-      filters.district = district;
-    }
-  }
-
   const rawType = readParam(query, "type")?.toLowerCase();
   if (rawType) {
     if (isPropertyType(rawType)) {
@@ -220,6 +234,13 @@ export function parseListingFilters(
     } else {
       issues.push({ code: "invalid-city" });
     }
+  }
+
+  const district = readParam(query, "district");
+  if (district) {
+    const issue = checkDistrict(district, filters.citySlug, options.knownDistricts);
+    if (issue) issues.push(issue);
+    else filters.district = district;
   }
 
   const rawCurrency = readParam(query, "currency");
@@ -348,11 +369,14 @@ export function hasActiveFilters(filters: ListingFilters): boolean {
   );
 }
 
-/** Number of filters set in the "more filters" section, for its summary label. */
+/**
+ * Number of filters set in the "more filters" section, for its summary label. City and district
+ * are in the main row; the original-currency filter is in "more filters".
+ */
 export function countAdvancedFilters(filters: ListingFilters): number {
   const floor = filters.minFloor !== undefined || filters.maxFloor !== undefined ? 1 : 0;
   return (
-    (filters.district !== undefined ? 1 : 0) +
+    (filters.originalCurrency !== undefined ? 1 : 0) +
     (filters.rooms !== undefined ? 1 : 0) +
     (filters.minBedrooms !== undefined ? 1 : 0) +
     (filters.minBathrooms !== undefined ? 1 : 0) +

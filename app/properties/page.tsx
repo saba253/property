@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { CurrencyToggle } from "@/components/currency/currency-toggle";
+import { MapResults } from "@/components/map/map-results";
+import { ViewToggle } from "@/components/map/view-toggle";
 import { RateNotice } from "@/components/currency/rate-notice";
 import { DemoDisclosure } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
@@ -13,6 +15,7 @@ import {
 } from "@/components/properties/listing-filters-form";
 import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { toMapListing } from "@/lib/map/map-listings";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
 import { getCitiesPresentIn, getDistrictsPresentIn } from "@/lib/properties/cities";
@@ -42,6 +45,7 @@ import {
   parseNonNegativeNumber,
   switchTransaction,
 } from "@/lib/properties/listing-filters";
+import { type ListingsView, parseListingsView } from "@/lib/properties/listings-view";
 import type { Currency, TransactionType } from "@/lib/properties/types";
 
 export const metadata: Metadata = {
@@ -84,6 +88,10 @@ function issueMessage(issue: FilterIssue): string {
       return "მითითებული გარიგების ტიპი არასწორია, ამიტომ ნაჩვენებია გასაყიდი განცხადებები.";
     case "invalid-district":
       return "მითითებული უბანი განცხადებებში ვერ მოიძებნა, ამიტომ უბნის ფილტრი არ გამოიყენება.";
+    case "district-not-in-city":
+      return "მითითებული უბანი არჩეულ ქალაქში არ არის, ამიტომ უბნის ფილტრი არ გამოიყენება.";
+    case "ambiguous-district":
+      return "ამ სახელის უბანი რამდენიმე ქალაქშია. აირჩიეთ ქალაქი, რომ უბნის ფილტრი გამოიყენოს.";
     case "invalid-property-type":
       return "მითითებული ქონების ტიპი არასწორია, ამიტომ ნაჩვენებია ყველა ტიპი.";
     case "floor-not-applicable":
@@ -145,21 +153,28 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   void _searchText;
   const query: RawQuery = search ? { ...explicitQuery, ...search.params } : explicitQuery;
 
-  const parsed = parseListingFilters(query, { knownDistricts: districts.map((d) => d.name) });
+  const parsed = parseListingFilters(query, { knownDistricts: districts });
+  // List or map; legacy URLs without `view` keep the list. Every link below keeps the view.
+  const { view, invalid: invalidView } = parseListingsView(rawQuery);
   const { filters, display } = parsed;
   const { matches, notComparableCount } = filterListings(allItems, filters, display, rateState);
   const values = toFormValues(query, parsed);
   const filtersActive = hasActiveFilters(filters);
-  const chips = getFilterChips(filters, display);
+  const chips = getFilterChips(filters, display, view);
   const otherCurrency: Currency = display === "USD" ? "GEL" : "USD";
   const otherHref = buildListingsHref(
     convertBudgetForDisplay(filters, display, otherCurrency, rateState),
     otherCurrency,
+    view,
   );
   const toggleHrefs: Record<Currency, string> =
     display === "USD"
-      ? { USD: buildListingsHref(filters, "USD"), GEL: otherHref }
-      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL") };
+      ? { USD: buildListingsHref(filters, "USD", view), GEL: otherHref }
+      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL", view) };
+  const viewHrefs: Record<ListingsView, string> = {
+    list: buildListingsHref(filters, display, "list"),
+    map: buildListingsHref(filters, display, "map"),
+  };
   const resultsIncomplete = notComparableCount > 0;
   const transaction = getTransaction(filters);
   // "Total" counts only listings of the chosen transaction type (sale and rent are separate).
@@ -168,11 +183,16 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   ).length;
   // Switching sale/rent keeps compatible filters but drops the budget (see switchTransaction).
   const transactionHrefs: Record<TransactionType, string> = {
-    sale: buildListingsHref(switchTransaction(filters, "sale"), display),
-    rent: buildListingsHref(switchTransaction(filters, "rent"), display),
+    sale: buildListingsHref(switchTransaction(filters, "sale"), display, view),
+    rent: buildListingsHref(switchTransaction(filters, "rent"), display, view),
   };
-  // Reset clears filters but keeps the chosen sale/rent tab and display currency.
-  const resetHref = buildListingsHref({ transaction: filters.transaction }, display);
+  // Reset clears filters but keeps the chosen sale/rent tab, display currency and view.
+  const resetHref = buildListingsHref({ transaction: filters.transaction }, display, view);
+  const cardData = (item: (typeof matches)[number]) => ({
+    price: getListingDisplayPrice(item, display, rateState),
+    href: buildListingDetailHref(item.listing.id, display),
+    ...getDemoListingCover(item.listing.id),
+  });
 
   return (
     <>
@@ -180,7 +200,10 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         <div className={`${pageContainer} py-4 sm:py-5`}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <TransactionTabs current={transaction} hrefFor={transactionHrefs} />
-            <CurrencyToggle current={display} hrefFor={toggleHrefs} />
+            <div className="flex flex-wrap items-center gap-3">
+              <ViewToggle current={view} hrefFor={viewHrefs} />
+              <CurrencyToggle current={display} hrefFor={toggleHrefs} />
+            </div>
           </div>
 
           {/* The key remounts the form so its fields always match the current URL. */}
@@ -194,15 +217,17 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
             advancedCount={countAdvancedFilters(filters)}
             showReset={filtersActive || parsed.issues.length > 0}
             resetHref={resetHref}
+            view={view}
           />
 
           {search && <SearchFeedback query={searchText} search={search} />}
 
-          {parsed.issues.length > 0 && (
+          {(parsed.issues.length > 0 || invalidView) && (
             <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
               {parsed.issues.map((issue, index) => (
                 <li key={index}>{issueMessage(issue)}</li>
               ))}
+              {invalidView && <li>მითითებული ხედი არასწორია, ამიტომ შედეგები ნაჩვენებია სიით.</li>}
             </ul>
           )}
 
@@ -220,7 +245,14 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
         </div>
       </section>
 
-      <div className={`${pageContainer} py-5 sm:py-6`}>
+      {/* The map view uses a wider container for the list + map split. */}
+      <div
+        className={
+          view === "map"
+            ? "mx-auto w-full max-w-[90rem] px-4 py-5 sm:px-6 sm:py-6 lg:px-8"
+            : `${pageContainer} py-5 sm:py-6`
+        }
+      >
         {/* Compact transparency row: demo disclosure and the NBG rate bar. */}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <DemoDisclosure />
@@ -260,16 +292,16 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           )}
         </div>
 
-        {matches.length > 0 ? (
+        {matches.length > 0 && view === "map" ? (
+          <div className="mt-5">
+            {/* Same filtered results, prices and links as the list; the map never filters. */}
+            <MapResults listings={matches.map((item) => toMapListing(item, cardData(item)))} />
+          </div>
+        ) : matches.length > 0 ? (
           <ul className="mt-5 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {matches.map((item) => (
               <li key={item.listing.id}>
-                <ListingCard
-                  {...item}
-                  {...getDemoListingCover(item.listing.id)}
-                  price={getListingDisplayPrice(item, display, rateState)}
-                  href={buildListingDetailHref(item.listing.id, display)}
-                />
+                <ListingCard {...item} {...cardData(item)} />
               </li>
             ))}
           </ul>
@@ -338,7 +370,6 @@ export default function DemoListingsPage({ searchParams }: PageProps<"/propertie
       {/* Visually hidden heading: the page opens directly with the search controls. */}
       <h1 className="sr-only">უძრავი ქონების ძიება (დემო განცხადებები)</h1>
       {/* Filters depend on the URL query, so they render at request time inside Suspense. */}
-      {/* A map view can be added beside the results in a later step. */}
       <Suspense fallback={<ListingsSkeleton />}>
         <FilteredListings searchParams={searchParams} />
       </Suspense>

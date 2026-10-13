@@ -178,7 +178,7 @@ export function LocationStep({
           label="უბანი"
           required
           placeholder={suggestions[0] ? `მაგ. ${suggestions[0].name}` : "მაგ. ვაკე"}
-          hint="ზუსტი მისამართი საჭირო არ არის."
+          hint="ზუსტი მისამართი საჭირო არ არის. რუქაზე ნაჩვენები იქნება მხოლოდ უბნის მიახლოებითი მდებარეობა, თუ უბანი ცნობილია."
           maxLength={60}
           list={suggestions.length > 0 ? "draft-district-suggestions" : undefined}
         />

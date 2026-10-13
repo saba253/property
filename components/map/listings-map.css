@@ -1,0 +1,114 @@
+/* Price markers for the listings map. Leaflet positions the outer element at the point; the
+   label is drawn above it, centred, like a speech bubble pointing at the location. */
+.pi-marker {
+  width: 0 !important;
+  height: 0 !important;
+  border: 0;
+  background: none;
+}
+
+.pi-marker:focus {
+  outline: none;
+}
+
+.pi-marker__label {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  border: 2px solid #172b46;
+  background: #ffffff;
+  color: #172b46;
+  font: 600 13px/1.2 var(--font-sans);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(23 43 70 / 0.18);
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    color 120ms,
+    transform 120ms;
+}
+
+/* Small tail pointing at the location. */
+.pi-marker__label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: inherit;
+  border-right: 2px solid #172b46;
+  border-bottom: 2px solid #172b46;
+  transform: rotate(45deg);
+}
+
+/* Approximate (area-level) positions: dashed outline, so they never read as exact pins. */
+.pi-marker--approximate .pi-marker__label,
+.pi-marker--approximate .pi-marker__label::after {
+  border-style: dashed;
+}
+
+.pi-marker__approx {
+  font-weight: 700;
+  color: #8a5e3b;
+}
+
+.pi-marker:hover .pi-marker__label,
+.pi-marker--highlighted .pi-marker__label {
+  background: #f7f4ee;
+}
+
+.pi-marker--selected .pi-marker__label {
+  background: #172b46;
+  color: #ffffff;
+}
+
+.pi-marker--selected .pi-marker__approx {
+  color: #e5d2bd;
+}
+
+.pi-marker:focus-visible .pi-marker__label {
+  outline: 3px solid #3478d4;
+  outline-offset: 2px;
+}
+
+/* Comfortable touch targets for the zoom buttons. */
+.pi-map .leaflet-control-zoom a {
+  width: 36px;
+  height: 36px;
+  line-height: 34px;
+  color: #172b46;
+}
+
+.pi-map .leaflet-control-zoom a:focus-visible {
+  outline: 3px solid #3478d4;
+  outline-offset: 1px;
+}
+
+.pi-map .leaflet-control-attribution {
+  font-size: 11px;
+}
+
+.pi-map {
+  font-family: var(--font-sans);
+  background: #e9eef3;
+}
+
+/* Several listings that would overlap at this zoom: activating the cluster zooms in. */
+.pi-marker--cluster .pi-marker__label {
+  background: #f7f4ee;
+  border-width: 2px;
+  font-weight: 700;
+}
+
+.pi-marker--cluster:hover .pi-marker__label {
+  background: #ffffff;
+}

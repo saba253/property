@@ -313,3 +313,14 @@ describe("isDraftDirty", () => {
     expect(isDraftDirty({ ...createEmptyDraft(), currency: "GEL" })).toBe(true);
   });
 });
+
+describe("draft location precision", () => {
+  it("stores only an area-level location derived from the district, never exact coordinates", () => {
+    expect(buildDraftListing(apartmentDraft())!.property.location).toEqual({
+      precision: "approximate",
+      areaId: "tbilisi-vake",
+    });
+    // No trustworthy reference point for this district: unknown, so no map pin.
+    expect(buildDraftListing(houseDraft())!.property.location).toEqual({ precision: "unknown" });
+  });
+});

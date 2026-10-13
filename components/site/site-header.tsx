@@ -25,7 +25,7 @@ export function SiteHeader() {
             <span className="lg:hidden">დამატება</span>
             <span className="hidden lg:inline">განცხადების დამატება</span>
           </Link>
-          <span className="hidden rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 sm:inline">
+          <span className="hidden rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 lg:inline">
             მუშავდება
           </span>
         </nav>

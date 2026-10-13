@@ -65,6 +65,24 @@ export type DerivedAmenityKey = "topFloor";
 
 export type AmenityKey = PropertyFeatureKey | ListingEquipmentKey | DerivedAmenityKey;
 
+/** A point on the map in WGS 84 degrees. */
+export type GeoPoint = { lat: number; lng: number };
+
+/**
+ * Where a property is, and how precisely that is known. Exact coordinates and area-level
+ * positions are kept apart on purpose:
+ * - "exact": verified coordinates of the property itself. Demo data never uses this.
+ * - "approximate": only the area (district) is known. The map shows the area's reference point
+ *   (see lib/geo/area-reference.ts), never a particular building, and labels it as approximate.
+ * - "unknown": no trustworthy location for the map; the listing stays in the results list.
+ */
+export type PropertyLocation =
+  | { precision: "exact"; point: GeoPoint; verifiedOn: string }
+  | { precision: "approximate"; areaId: string }
+  | { precision: "unknown" };
+
+export type LocationPrecision = PropertyLocation["precision"];
+
 /** Facts shared by every property type. */
 type PropertyBase = {
   id: string;
@@ -72,6 +90,8 @@ type PropertyBase = {
   district: string;
   /** Usable floor area in m² (for a house: the house itself, not the plot). */
   areaSqm: number;
+  /** Map location and its precision. Missing means unknown (no pin is shown). */
+  location?: PropertyLocation;
   /** Building and apartment features; a missing key means unknown. */
   features?: Partial<Record<PropertyFeatureKey, AmenityStatus>>;
   dataSource: DataSource;

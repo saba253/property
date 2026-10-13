@@ -1,5 +1,6 @@
 import Form from "next/form";
 import Link from "next/link";
+import { CityDistrictFields } from "@/components/properties/city-district-fields";
 import { card, fieldInput, fieldLabel } from "@/components/ui/styles";
 import {
   AMENITIES,
@@ -18,6 +19,7 @@ import {
   PROPERTY_TYPE_ORDER,
   isPropertyType,
 } from "@/lib/properties/listing-types";
+import type { ListingsView } from "@/lib/properties/listings-view";
 import type { Currency, PropertyType, TransactionType } from "@/lib/properties/types";
 
 /** Initial values of the form fields, as strings. Empty string means "not set". */
@@ -43,6 +45,8 @@ type ListingFiltersFormProps = {
   advancedCount: number;
   showReset: boolean;
   resetHref: string;
+  /** Kept on submit, so filtering in the map view stays in the map view. */
+  view: ListingsView;
 };
 
 function NumberInput({
@@ -197,6 +201,7 @@ export function ListingFiltersForm({
   advancedCount,
   showReset,
   resetHref,
+  view,
 }: ListingFiltersFormProps) {
   const symbol = display === "USD" ? "$" : "₾";
   const selectedAmenities = new Set(values.amenities);
@@ -209,7 +214,8 @@ export function ListingFiltersForm({
     <Form action="/properties" aria-label="განცხადებების ფილტრები" className={`${card} p-4 sm:p-5`}>
       <input type="hidden" name="display" value={display} />
       {isRent && <input type="hidden" name="transaction" value="rent" />}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1fr_1.5fr_1.5fr_auto] lg:items-end">
+      {view === "map" && <input type="hidden" name="view" value="map" />}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1.2fr_1.5fr_1.5fr_auto] lg:items-end">
         <div>
           <label htmlFor="filter-type" className={fieldLabel}>
             ქონების ტიპი
@@ -229,36 +235,12 @@ export function ListingFiltersForm({
           </select>
         </div>
 
-        <div>
-          <label htmlFor="filter-city" className={fieldLabel}>
-            ქალაქი
-          </label>
-          <select id="filter-city" name="city" defaultValue={values.city} className={fieldInput}>
-            <option value="">ყველა</option>
-            {cities.map((city) => (
-              <option key={city.slug} value={city.slug}>
-                {city.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="col-span-2 lg:col-span-1">
-          <label htmlFor="filter-currency" className={fieldLabel}>
-            ორიგინალი ვალუტა
-          </label>
-          <select
-            id="filter-currency"
-            name="currency"
-            defaultValue={values.currency}
-            aria-describedby="filter-currency-hint"
-            className={fieldInput}
-          >
-            <option value="">ნებისმიერი</option>
-            <option value="USD">USD ($)</option>
-            <option value="GEL">GEL (₾)</option>
-          </select>
-        </div>
+        <CityDistrictFields
+          cities={cities}
+          districts={districts}
+          defaultCity={values.city}
+          defaultDistrict={values.district}
+        />
 
         <RangeFieldset
           legend={isRent ? `ქირა თვეში (${symbol} ${display})` : `ბიუჯეტი (${symbol} ${display})`}
@@ -315,22 +297,20 @@ export function ListingFiltersForm({
 
         <div className="mt-4 space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="col-span-2">
-              <label htmlFor="filter-district" className={fieldLabel}>
-                უბანი
+            <div className="col-span-2 lg:col-span-1">
+              <label htmlFor="filter-currency" className={fieldLabel}>
+                ორიგინალი ვალუტა
               </label>
               <select
-                id="filter-district"
-                name="district"
-                defaultValue={values.district}
+                id="filter-currency"
+                name="currency"
+                defaultValue={values.currency}
+                aria-describedby="filter-currency-hint"
                 className={fieldInput}
               >
                 <option value="">ნებისმიერი</option>
-                {districts.map((district) => (
-                  <option key={`${district.city}-${district.name}`} value={district.name}>
-                    {district.name} ({district.city})
-                  </option>
-                ))}
+                <option value="USD">USD ($)</option>
+                <option value="GEL">GEL (₾)</option>
               </select>
             </div>
             <div className="col-span-2 lg:col-span-1">

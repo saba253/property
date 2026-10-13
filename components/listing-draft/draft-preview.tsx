@@ -9,6 +9,7 @@ import { type Fact, FactList } from "@/components/properties/fact-list";
 import { PricePerSqmCallout } from "@/components/properties/price-per-sqm";
 import { card } from "@/components/ui/styles";
 import type { ExchangeRateState } from "@/lib/currency/exchange-rate";
+import { describeLocationPrecision } from "@/lib/geo/location";
 import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import type { DraftPhoto } from "@/lib/listing-draft/draft";
 import { draftPhotosToImages } from "@/lib/listing-draft/draft-photos";
@@ -76,6 +77,9 @@ export function DraftPreview({ item, photos, rateState }: DraftPreviewProps) {
           </h3>
           <p className="mt-2 text-lg text-muted">
             {property.city}, {property.district}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            {describeLocationPrecision(property.location?.precision ?? "unknown")}
           </p>
 
           <section aria-labelledby="draft-facts-heading" className="mt-8">
