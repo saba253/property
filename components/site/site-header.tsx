@@ -8,12 +8,22 @@ export function SiteHeader() {
       <div className={`${pageContainer} flex h-16 items-center justify-between gap-3`}>
         <Logo />
 
-        <nav aria-label="მთავარი ნავიგაცია" className="flex items-center gap-2">
+        <nav aria-label="მთავარი ნავიგაცია" className="flex items-center gap-1 sm:gap-2">
           <Link
             href="/properties"
             className="rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap text-navy transition-colors hover:bg-cream"
           >
             დემო განცხადებები
+          </Link>
+          <Link
+            href="/properties/new"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line-strong px-3 py-2 text-sm font-medium whitespace-nowrap text-navy transition-colors hover:border-navy"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 fill-current">
+              <path d="M10 3a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H4a1 1 0 1 1 0-2h5V4a1 1 0 0 1 1-1Z" />
+            </svg>
+            <span className="lg:hidden">დამატება</span>
+            <span className="hidden lg:inline">განცხადების დამატება</span>
           </Link>
           <span className="hidden rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 sm:inline">
             მუშავდება
