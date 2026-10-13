@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { RateNotice } from "@/components/currency/rate-notice";
+import { ListingGallery } from "@/components/gallery/listing-gallery";
 import { DemoBadge, DemoNotice } from "@/components/properties/demo-label";
 import {
   BackToListingsLink,
@@ -14,11 +15,14 @@ import {
 } from "@/components/properties/detail-pricing";
 import { AmenityList } from "@/components/properties/amenity-list";
 import { type Fact, FactList } from "@/components/properties/fact-list";
-import { PropertyIllustration } from "@/components/properties/property-illustration";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
-import { getDemoListingIds, getDemoListingWithProperty } from "@/lib/properties/get-demo-listing";
+import {
+  getDemoListingIds,
+  getDemoListingImages,
+  getDemoListingWithProperty,
+} from "@/lib/properties/get-demo-listing";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getStructuralFacts } from "@/lib/properties/property-facts";
 
@@ -57,6 +61,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
   }
 
   const { listing, property } = data;
+  const images = getDemoListingImages(listing.id);
   const { currency } = listing.askingPrice;
   // One rate snapshot; both currencies are prepared so the client can switch without a fetch.
   const rateState = await getExchangeRateState();
@@ -87,11 +92,9 @@ export default async function PropertyDetailPage({ params }: PageProps) {
         </DemoNotice>
       </div>
 
-      <PropertyIllustration
-        seed={listing.id}
-        kind={property.type}
-        className="mt-6 aspect-[4/3] rounded-card sm:aspect-[21/9]"
-      />
+      <div className="mt-6">
+        <ListingGallery images={images} title={listing.title} />
+      </div>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div>
@@ -169,8 +172,10 @@ export default async function PropertyDetailPage({ params }: PageProps) {
               მონაცემების წყარო
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted">
-              დემო მონაცემები: განცხადების ყველა მონაცემი გამოგონილია პლატფორმის საჩვენებლად. სურათი
-              არის ილუსტრაცია და არა ქონების რეალური ფოტო.
+              დემო მონაცემები: განცხადების ყველა მონაცემი გამოგონილია პლატფორმის საჩვენებლად.
+              {images.length > 0
+                ? " სურათები ორიგინალური ილუსტრაციებია და არა ქონების რეალური ფოტოები."
+                : " ამ განცხადებას სურათები არ აქვს."}
             </p>
           </section>
         </div>

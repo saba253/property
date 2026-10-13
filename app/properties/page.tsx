@@ -22,7 +22,10 @@ import {
   buildListingsHref,
   getFilterChips,
 } from "@/lib/properties/filter-chips";
-import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
+import {
+  getActiveDemoListingsWithProperties,
+  getDemoListingCover,
+} from "@/lib/properties/get-demo-listing";
 import {
   type CountFilterKey,
   type FilterIssue,
@@ -263,6 +266,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
               <li key={item.listing.id}>
                 <ListingCard
                   {...item}
+                  {...getDemoListingCover(item.listing.id)}
                   price={getListingDisplayPrice(item, display, rateState)}
                   href={buildListingDetailHref(item.listing.id, display)}
                 />

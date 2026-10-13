@@ -9,8 +9,12 @@ export type Money = {
   currency: Currency;
 };
 
-/** Only "demo" exists for now. Adding "real" later will be a deliberate change. */
-export type DataSource = "demo";
+/**
+ * Where data comes from. "demo": invented examples. "local-draft": a listing someone is preparing
+ * in their browser on /properties/new; it is never published, stored or listed anywhere.
+ * Adding "real" later will be a deliberate change.
+ */
+export type DataSource = "demo" | "local-draft";
 
 /**
  * Supported property types. Land plots and commercial property are planned: add them here,
@@ -124,3 +128,48 @@ export type RentListing = ListingBase & { transactionType: "rent"; rentPeriod: R
 
 /** An offer for a property (sale or rent). One property can have several listings over time. */
 export type Listing = SaleListing | RentListing;
+
+/**
+ * Original illustrated scenes used as demo images. They are drawings, never photos, and are
+ * always labelled as illustrations wherever they are shown.
+ */
+export type IllustrationScene =
+  | "building-exterior"
+  | "house-exterior"
+  | "living-room"
+  | "kitchen"
+  | "bedroom"
+  | "bathroom"
+  | "balcony-view"
+  | "yard";
+
+/**
+ * Where an image comes from. "illustration" is an original SVG drawing rendered in the app.
+ * "photo" is a real image file: today only local browser previews in the draft listing form
+ * (object URLs that are never uploaded); later, uploaded photos stored by the platform.
+ */
+export type ListingImageSource =
+  | { kind: "illustration"; scene: IllustrationScene }
+  | { kind: "photo"; src: string; width?: number; height?: number };
+
+/**
+ * One image of a listing.
+ *
+ * Ownership: images belong to the Listing, not to the Property. Photos show the property as it
+ * was offered at that time (furniture, renovation, season), so a later sale or rental of the
+ * same physical property brings its own image set. Images are kept in their own collection,
+ * keyed by `listingId`, like a future database table.
+ */
+export type ListingImage = {
+  id: string;
+  listingId: string;
+  /** Display position, lowest first. Ties are broken by `id` so the order is always stable. */
+  order: number;
+  /** Marks the cover image. Without one, the first image by `order` is the cover. */
+  isCover?: boolean;
+  /** Required descriptive alternative text (Georgian). */
+  alt: string;
+  /** Optional short caption shown in the photo viewer. */
+  caption?: string;
+  source: ListingImageSource;
+};

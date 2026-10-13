@@ -1,5 +1,11 @@
 import { pickIllustrationVariant } from "@/lib/properties/illustration";
-import type { PropertyType } from "@/lib/properties/types";
+
+/*
+ * Original illustrated exterior scenes (a block of apartment buildings, a private house). They
+ * are drawings, not photos of any real property. Rendered inside the shared scene frame in
+ * components/gallery/illustration-scenes.tsx (viewBox 400 × 300). They use no SVG ids, so the
+ * same drawing can appear several times on a page (gallery, thumbnails, photo viewer).
+ */
 
 type Palette = {
   skyTop: string;
@@ -11,7 +17,7 @@ type Palette = {
   tree: string;
 };
 
-// Original, invented colour scenes. They are drawings, not photos of any real property.
+// Original, invented colour scenes.
 const PALETTES: readonly Palette[] = [
   {
     // Navy dusk over cream.
@@ -106,11 +112,60 @@ function Windows({ building, color }: { building: Building; color: string }) {
   );
 }
 
+/** Sky drawn as soft bands instead of an SVG gradient (gradients need document-unique ids). */
+function Sky({ palette }: { palette: Palette }) {
+  return (
+    <>
+      <rect width="400" height="300" fill={palette.skyTop} />
+      <rect y="90" width="400" height="210" fill={palette.skyBottom} opacity="0.35" />
+      <rect y="150" width="400" height="150" fill={palette.skyBottom} opacity="0.55" />
+      <circle cx="318" cy="68" r="26" fill={palette.sun} />
+    </>
+  );
+}
+
+function Ground({ palette }: { palette: Palette }) {
+  return (
+    <>
+      <rect y={GROUND_Y} width="400" height={300 - GROUND_Y} fill={palette.ground} />
+      <rect x="20" y={GROUND_Y - 22} width="4" height="22" fill={palette.tree} />
+      <circle cx="22" cy={GROUND_Y - 30} r="14" fill={palette.tree} />
+    </>
+  );
+}
+
+/** A block of apartment buildings with lit windows. */
+export function BuildingExteriorScene({ seed }: { seed: string }) {
+  const palette = PALETTES[pickIllustrationVariant(seed, PALETTES.length)];
+  const layout = LAYOUTS[pickIllustrationVariant(`${seed}:layout`, LAYOUTS.length)];
+  return (
+    <g>
+      <Sky palette={palette} />
+      {layout.map((building, index) => (
+        <g key={index}>
+          <rect
+            x={building.x}
+            y={GROUND_Y - building.height}
+            width={building.width}
+            height={building.height}
+            rx={6}
+            fill={palette.buildings[index]}
+          />
+          <Windows building={building} color={palette.windows} />
+        </g>
+      ))}
+      <Ground palette={palette} />
+    </g>
+  );
+}
+
 /** A private house with a pitched roof, door, windows and a low fence. */
-function HouseScene({ palette }: { palette: Palette }) {
+export function HouseExteriorScene({ seed }: { seed: string }) {
+  const palette = PALETTES[pickIllustrationVariant(seed, PALETTES.length)];
   const [roof, body, accent] = palette.buildings;
   return (
     <g>
+      <Sky palette={palette} />
       <rect x="252" y="98" width="16" height="34" fill={roof} />
       <polygon points="104,156 200,86 296,156" fill={roof} />
       <rect x="120" y="150" width="160" height="100" rx="4" fill={accent} />
@@ -132,73 +187,7 @@ function HouseScene({ palette }: { palette: Palette }) {
           opacity="0.55"
         />
       ))}
+      <Ground palette={palette} />
     </g>
-  );
-}
-
-type PropertyIllustrationProps = {
-  /** Stable seed, for example the listing id, so a listing always gets the same drawing. */
-  seed: string;
-  /** Apartments are drawn as a block of buildings, houses as a single house. */
-  kind?: PropertyType;
-  className?: string;
-};
-
-/**
- * Original illustrated placeholder used instead of property photos. It is always labelled
- * as an illustration so it can never be mistaken for a real photo of the property.
- */
-export function PropertyIllustration({
-  seed,
-  kind = "apartment",
-  className = "",
-}: PropertyIllustrationProps) {
-  const palette = PALETTES[pickIllustrationVariant(seed, PALETTES.length)];
-  const layout = LAYOUTS[pickIllustrationVariant(`${seed}:layout`, LAYOUTS.length)];
-  const gradientId = `sky-${seed.replace(/[^a-zA-Z0-9-]/g, "")}`;
-
-  return (
-    <div className={`relative overflow-hidden bg-cream ${className}`}>
-      <svg
-        viewBox="0 0 400 300"
-        preserveAspectRatio="xMidYMax slice"
-        role="img"
-        aria-label="ილუსტრაცია, არა რეალური ფოტო"
-        className="h-full w-full"
-      >
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={palette.skyTop} />
-            <stop offset="1" stopColor={palette.skyBottom} />
-          </linearGradient>
-        </defs>
-        <rect width="400" height="300" fill={`url(#${gradientId})`} />
-        <circle cx="318" cy="68" r="26" fill={palette.sun} />
-        {kind === "house" ? (
-          <HouseScene palette={palette} />
-        ) : (
-          layout.map((building, index) => (
-            <g key={index}>
-              <rect
-                x={building.x}
-                y={GROUND_Y - building.height}
-                width={building.width}
-                height={building.height}
-                rx={6}
-                fill={palette.buildings[index]}
-              />
-              <Windows building={building} color={palette.windows} />
-            </g>
-          ))
-        )}
-        <rect y={GROUND_Y} width="400" height={300 - GROUND_Y} fill={palette.ground} />
-        <rect x="20" y={GROUND_Y - 22} width="4" height="22" fill={palette.tree} />
-        <circle cx="22" cy={GROUND_Y - 30} r="14" fill={palette.tree} />
-      </svg>
-
-      <span className="absolute right-3 bottom-3 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-medium text-ink backdrop-blur">
-        ილუსტრაცია · არა რეალური ფოტო
-      </span>
-    </div>
   );
 }

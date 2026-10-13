@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { PricePerSqmChip } from "@/components/properties/price-per-sqm";
-import { PropertyIllustration } from "@/components/properties/property-illustration";
 import type { DisplayPrice } from "@/lib/pricing/display-price";
 import {
   formatDisplayAmount,
@@ -11,16 +11,29 @@ import {
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getCardFacts } from "@/lib/properties/property-facts";
+import type { ListingImage } from "@/lib/properties/types";
 
 type ListingCardProps = ListingWithProperty & {
   /** Must come from getListingDisplayPrice, so rental prices carry their monthly period. */
   price: DisplayPrice;
   href: string;
+  /** Cover image (selectCoverImage), or null for the "no images" placeholder. */
+  coverImage: ListingImage | null;
+  imageCount: number;
 };
 
-export function ListingCard({ listing, property, price, href }: ListingCardProps) {
+export function ListingCard({
+  listing,
+  property,
+  price,
+  href,
+  coverImage,
+  imageCount,
+}: ListingCardProps) {
   const pricePerSqm = formatDisplayPricePerSqm(price);
   const facts = getCardFacts(property);
+  const imageBox =
+    "aspect-[4/3] rounded-card shadow-card transition-shadow group-hover:shadow-card-hover";
 
   return (
     // Hover: soft image shadow and a faint cream background; no underline, scaling or layout shift
@@ -30,12 +43,22 @@ export function ListingCard({ listing, property, price, href }: ListingCardProps
       className="group -m-2 block rounded-card p-2 transition-colors duration-150 hover:bg-cream/70"
     >
       <div className="relative">
-        <PropertyIllustration
-          seed={listing.id}
-          kind={property.type}
-          className="aspect-[4/3] rounded-card shadow-card transition-shadow group-hover:shadow-card-hover"
-        />
+        {/* Fixed aspect ratio box, so the card never shifts while the image renders. */}
+        {coverImage ? (
+          <ListingImageView image={coverImage} decorative className={imageBox} />
+        ) : (
+          <NoImagesPlaceholder compact className={imageBox} />
+        )}
         <DemoBadge className="absolute top-3 left-3" />
+        {imageCount > 1 && (
+          <span className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-navy/75 px-2.5 py-1 text-xs font-semibold text-white">
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3.5 w-3.5 fill-current">
+              <path d="M7.4 3a1.5 1.5 0 0 0-1.3.8L5.4 5H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1.4l-.7-1.2a1.5 1.5 0 0 0-1.3-.8H7.4ZM10 7.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z" />
+            </svg>
+            <span className="sr-only">სურათები:</span>
+            {imageCount}
+          </span>
+        )}
       </div>
 
       <div className="mt-3 px-1">

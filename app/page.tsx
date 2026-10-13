@@ -6,7 +6,10 @@ import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
+import {
+  getActiveDemoListingsWithProperties,
+  getDemoListingCover,
+} from "@/lib/properties/get-demo-listing";
 
 const FEATURED_COUNT = 3;
 
@@ -58,6 +61,7 @@ export default async function Home() {
             <li key={item.listing.id}>
               <ListingCard
                 {...item}
+                {...getDemoListingCover(item.listing.id)}
                 price={getListingDisplayPrice(item, DEFAULT_DISPLAY_CURRENCY, rateState)}
                 href={buildListingDetailHref(item.listing.id)}
               />
