@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { CurrencyToggle } from "@/components/currency/currency-toggle";
+import { useDisplayCurrency } from "@/components/currency/use-display-currency";
 import { PricePerSqmCallout } from "@/components/properties/price-per-sqm";
 import { buttonSecondary } from "@/components/ui/styles";
 import type { DisplayPrice } from "@/lib/pricing/display-price";
@@ -14,7 +14,6 @@ import {
 } from "@/lib/pricing/format-display-price";
 import { formatArea, formatMoney, formatPricePerSqm } from "@/lib/pricing/format-money";
 import { buildListingDetailHref, buildListingsHref } from "@/lib/properties/filter-chips";
-import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
 import type { Currency, TransactionType } from "@/lib/properties/types";
 
 /*
@@ -25,11 +24,6 @@ import type { Currency, TransactionType } from "@/lib/properties/types";
  */
 
 export type PricesByCurrency = Record<Currency, DisplayPrice>;
-
-function useDisplayCurrency(): Currency {
-  const value = useSearchParams().get("display");
-  return parseDisplayCurrency(value ? { display: value } : {}).display;
-}
 
 type SummaryProps = { listingId: string; prices: PricesByCurrency };
 

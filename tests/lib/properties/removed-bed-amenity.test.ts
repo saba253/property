@@ -7,10 +7,6 @@ import { demoListings } from "@/lib/properties/demo-data";
 import { getActiveDemoListingsWithProperties } from "@/lib/properties/get-demo-listing";
 import { filterListings, parseListingFilters } from "@/lib/properties/listing-filters";
 import { getCardFacts } from "@/lib/properties/property-facts";
-import {
-  parseSavedSearchQuery,
-  parseStoredSavedSearches,
-} from "@/lib/saved-searches/saved-searches";
 
 // "საწოლი" (bed) was removed from the furniture and appliances characteristics. Bedrooms and
 // rooms are structural facts and must keep working.
@@ -46,21 +42,15 @@ describe("removed bed characteristic", () => {
     expect(parsed.issues).toEqual([{ code: "invalid-amenity" }]);
   });
 
-  it("is flagged and dropped when an old saved search is reopened", () => {
-    const stored = JSON.stringify({
-      version: 1,
-      searches: [
-        { id: "s-oldbed1", name: "ძველი", query: "city=tbilisi&amenity=bed&amenity=balcony" },
-        { id: "s-other01", name: "სხვა", query: "transaction=rent" },
-      ],
-    });
-    const searches = parseStoredSavedSearches(stored);
-    // Both saved searches are kept; nothing unrelated is deleted.
-    expect(searches.map((search) => search.id)).toEqual(["s-oldbed1", "s-other01"]);
-    const reopened = parseSavedSearchQuery(searches[0].query, { knownDistricts });
-    expect(reopened.hasIgnoredParts).toBe(true);
-    expect(reopened.href).toBe("/properties?city=tbilisi&amenity=balcony");
-    expect(reopened.criteria).not.toContain("საწოლი");
+  it("still opens an old bookmarked search with bed as an ordinary search", () => {
+    // Saved searches were removed later; their URLs are plain /properties searches.
+    const query = Object.fromEntries(new URLSearchParams("city=tbilisi&amenity=balcony"));
+    const parsed = parseListingFilters(
+      { ...query, amenity: ["bed", "balcony"] },
+      { knownDistricts },
+    );
+    expect(parsed.filters).toEqual({ amenities: ["balcony"], citySlug: "tbilisi" });
+    expect(parsed.issues).toEqual([{ code: "invalid-amenity" }]);
   });
 });
 

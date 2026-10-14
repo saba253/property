@@ -17,14 +17,17 @@ import {
   type PricesByCurrency,
 } from "@/components/properties/detail-pricing";
 import { AmenityList } from "@/components/properties/amenity-list";
+import { AskingPriceContextSection } from "@/components/properties/asking-price-context";
 import { type Fact, FactList } from "@/components/properties/fact-list";
 import { card, pageContainer } from "@/components/ui/styles";
+import { getAskingPriceContext } from "@/lib/analytics/asking-price-context";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { describeLocationPrecision, resolveMapPosition } from "@/lib/geo/location";
 import { knownCities } from "@/lib/properties/cities";
 import { buildListingsHref } from "@/lib/properties/filter-chips";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import {
+  getActiveDemoListingsWithProperties,
   getDemoListingIds,
   getDemoListingImages,
   getDemoListingWithProperty,
@@ -76,6 +79,12 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     USD: getListingDisplayPrice(data, "USD", rateState),
     GEL: getListingDisplayPrice(data, "GEL", rateState),
   };
+  // Comparables are selected once per render, with the same rate snapshot as the prices.
+  const priceContext = getAskingPriceContext(
+    data,
+    getActiveDemoListingsWithProperties(),
+    rateState,
+  );
 
   // Unknown facts are shown as "not specified"; nothing is invented to fill gaps.
   // City and district are shown under the title.
@@ -196,6 +205,8 @@ export default async function PropertyDetailPage({ params }: PageProps) {
               </p>
             </div>
           </section>
+
+          <AskingPriceContextSection subject={data} context={priceContext} />
 
           <section aria-labelledby="source-heading" className="mt-10">
             <h2 id="source-heading" className="text-xl font-semibold text-navy">

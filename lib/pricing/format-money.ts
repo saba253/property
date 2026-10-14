@@ -12,9 +12,12 @@ function formatNumber(value: number, minFractionDigits: number, maxFractionDigit
   }).format(value);
 }
 
-/** Example: formatMoney(150000, "USD") returns "$150,000". Shown in whole units. */
-export function formatMoney(amount: number, currency: Currency): string {
-  return `${CURRENCY_SYMBOLS[currency]}${formatNumber(amount, 0, 0)}`;
+/**
+ * Example: formatMoney(150000, "USD") returns "$150,000". Shown in whole units unless
+ * `maxFractionDigits` allows decimals (formatMoney(17.14, "USD", 1) returns "$17.1").
+ */
+export function formatMoney(amount: number, currency: Currency, maxFractionDigits = 0): string {
+  return `${CURRENCY_SYMBOLS[currency]}${formatNumber(amount, 0, maxFractionDigits)}`;
 }
 
 /** Example: formatPricePerSqm(2307.69, "USD") returns "$2,307.69 / მ²". */

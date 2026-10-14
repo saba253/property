@@ -10,7 +10,6 @@ const MENU_ITEMS: readonly HeaderMenuItem[] = [
   { href: "/properties", label: "განცხადებების ძიება", description: "დემო განცხადებები" },
   { href: "/favorites", label: "რჩეული განცხადებები", description: "ინახება ამ ბრაუზერში" },
   { href: "/compare", label: "შედარება", description: "2–4 განცხადება გვერდიგვერდ" },
-  { href: "/saved-searches", label: "შენახული ძიებები", description: "ინახება ამ ბრაუზერში" },
   { href: "/properties/new", label: "განცხადების დამატება", description: "დემო: არ ქვეყნდება" },
 ];
 
