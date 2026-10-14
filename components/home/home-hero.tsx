@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HeroIllustration } from "@/components/home/hero-illustration";
 import { pageContainer } from "@/components/ui/styles";
+import { TRANSACTION_TYPES, TRANSACTION_TYPE_ORDER } from "@/lib/properties/listing-types";
 import { MAX_SEARCH_QUERY_LENGTH } from "@/lib/search/parse-search-query";
 
 const EXAMPLES: readonly { text: string; transaction?: "rent" }[] = [
@@ -10,10 +11,11 @@ const EXAMPLES: readonly { text: string; transaction?: "rent" }[] = [
   { text: "ბათუმი ბინა ქირით", transaction: "rent" },
 ];
 
-const TABS: readonly { value: "sale" | "rent"; label: string }[] = [
-  { value: "sale", label: "ყიდვა" },
-  { value: "rent", label: "ქირაობა" },
-];
+// Same labels as everywhere else ("იყიდება" / "ქირავდება"), from the shared registry.
+const TABS = TRANSACTION_TYPE_ORDER.map((value) => ({
+  value,
+  label: TRANSACTION_TYPES[value].label,
+}));
 
 function exampleHref(example: (typeof EXAMPLES)[number]): string {
   const params = new URLSearchParams({ q: example.text });
@@ -48,7 +50,7 @@ export function HomeHero() {
 
           <form action="/properties" method="get" role="search" className="mt-8">
             <fieldset>
-              <legend className="sr-only">რას ეძებთ: ყიდვა თუ ქირაობა?</legend>
+              <legend className="sr-only">გარიგების ტიპი</legend>
               <div className="inline-flex rounded-full bg-navy/50 p-1 ring-1 ring-white/20 backdrop-blur">
                 {TABS.map((tab) => (
                   <label
