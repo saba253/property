@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
+import { CompareButton } from "@/components/compare/compare-button";
 import { FavoriteButton } from "@/components/favorites/favorite-button";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { PricePerSqmChip } from "@/components/properties/price-per-sqm";
@@ -82,6 +83,10 @@ export function ListingCard({
           <p className="mt-0.5 text-xs text-subtle">{originalPriceNote(price)}</p>
         </div>
       </Link>
+      {/* Below the card text, outside the link: comparing never navigates. */}
+      <div className="px-3 pb-2">
+        <CompareButton listingId={listing.id} title={listing.title} />
+      </div>
       {/* Over the image's top-right corner: the link's padding (0.5rem) plus 0.75rem. */}
       <FavoriteButton
         listingId={listing.id}

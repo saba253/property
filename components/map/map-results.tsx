@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
+import { CompareButton } from "@/components/compare/compare-button";
 import { FavoriteButton } from "@/components/favorites/favorite-button";
 import { DemoBadge } from "@/components/properties/demo-label";
 import { PRECISION_LABELS } from "@/lib/geo/location";
@@ -104,11 +105,12 @@ function ResultRow({
           <p className="truncate text-xs text-muted">{listing.facts.join(" · ")}</p>
         </div>
       </Link>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 px-1">
-        <span className="min-w-0 truncate text-xs text-muted">
-          {listing.place} · <PrecisionNote listing={listing} />
-        </span>
-        <div className="flex shrink-0 items-center gap-2">
+      <p className="mt-1.5 truncate px-1 text-xs text-muted">
+        {listing.place} · <PrecisionNote listing={listing} />
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
+        <CompareButton listingId={listing.id} title={listing.title} />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {key && (
             <button
               type="button"
@@ -213,6 +215,9 @@ function MarkerPreview({
               variant="compact"
               className="absolute top-3 right-3"
             />
+            <div className="px-4 pb-3">
+              <CompareButton listingId={listing.id} title={listing.title} />
+            </div>
           </li>
         ))}
       </ul>
@@ -294,7 +299,7 @@ export function MapResults({ listings }: MapResultsProps) {
 
       <div
         ref={mapAreaRef}
-        className="relative order-1 h-[60vh] min-h-[22rem] overflow-hidden rounded-card border border-line bg-cream lg:sticky lg:top-20 lg:order-2 lg:h-[calc(100dvh-6.5rem)] lg:min-h-[28rem]"
+        className="relative order-1 h-[60vh] min-h-[22rem] overflow-hidden rounded-card border border-line bg-cream lg:sticky lg:top-20 lg:order-2 lg:h-[calc(100dvh-6.5rem-var(--compare-tray-space,0px))] lg:min-h-[28rem]"
       >
         <ListingsMap
           groups={groups}

@@ -47,6 +47,8 @@
 }
 
 body {
+  /* Space for the fixed comparison tray (set by the tray; 0 when it is hidden). */
+  padding-bottom: var(--compare-tray-space, 0px);
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);

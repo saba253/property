@@ -55,7 +55,7 @@ export function parseSort(query: RawQuery): { sort: SortOption; invalid: boolean
  */
 const BASE_CURRENCY: Currency = "USD";
 
-type Measure = "price" | "area" | "price_per_sqm";
+export type Measure = "price" | "area" | "price_per_sqm";
 
 function parseKey(sort: SortKey): { measure: Measure; direction: 1 | -1 } {
   const direction = sort.endsWith("_desc") ? -1 : 1;
@@ -79,7 +79,12 @@ function comparablePrice(
   return convertAmount(amount, original, currency, rateState.rate);
 }
 
-function comparableValue(
+/**
+ * A listing's value for one measure as a plain number in `currency` (not rounded), or null when it
+ * cannot be compared honestly (for example another currency and no exchange rate, or no area).
+ * Shared by sorting and by the comparison page.
+ */
+export function comparableMeasure(
   item: ListingWithProperty,
   measure: Measure,
   currency: Currency,
@@ -97,6 +102,21 @@ function comparableValue(
       return price === null || validArea === null ? null : price / validArea;
     }
   }
+}
+
+/**
+ * The currency in which prices of these listings can be compared: the base currency (USD) when an
+ * exchange rate is available, the listings' own currency when they all share one, otherwise null
+ * (USD and GEL without a rate cannot be compared honestly).
+ */
+export function priceComparisonCurrency(
+  items: readonly ListingWithProperty[],
+  rateState: ExchangeRateState,
+): Currency | null {
+  if (rateState.status === "available") return BASE_CURRENCY;
+  const currencies = new Set(items.map((item) => item.listing.askingPrice.currency));
+  if (currencies.size > 1) return null;
+  return [...currencies][0] ?? BASE_CURRENCY;
 }
 
 export type SortResult = {
@@ -128,21 +148,16 @@ export function sortListings(
   if (sort === "default") return { items: [...items], applied: "default", notice: null };
   const { measure, direction } = parseKey(sort);
 
-  let currency = BASE_CURRENCY;
-  if (measure !== "area" && rateState.status !== "available") {
-    const currencies = new Set(items.map((item) => item.listing.askingPrice.currency));
-    if (currencies.size > 1) {
-      return { items: [...items], applied: "default", notice: "rate-unavailable" };
-    }
-    // All in one currency: compare in that currency, no conversion needed.
-    currency = [...currencies][0] ?? BASE_CURRENCY;
+  const currency = measure === "area" ? BASE_CURRENCY : priceComparisonCurrency(items, rateState);
+  if (currency === null) {
+    return { items: [...items], applied: "default", notice: "rate-unavailable" };
   }
 
   const keyed = items.map((item, index) => ({
     item,
     index,
     group: item.listing.transactionType,
-    value: comparableValue(item, measure, currency, rateState),
+    value: comparableMeasure(item, measure, currency, rateState),
   }));
   const groupOrder = [...new Set(keyed.map((entry) => entry.group))];
 
