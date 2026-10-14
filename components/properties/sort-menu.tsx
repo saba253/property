@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useDismissableDetails } from "@/components/ui/use-dismissable-details";
 import { SORT_OPTIONS, type SortOption, sortLabel } from "@/lib/properties/listing-sort";
 
 type SortMenuProps = {
@@ -18,26 +19,7 @@ type SortMenuProps = {
 export function SortMenu({ current, hrefFor }: SortMenuProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
-  useEffect(() => {
-    const details = detailsRef.current;
-    if (!details) return;
-    const close = (event: Event) => {
-      if (!details.open) return;
-      if (event instanceof KeyboardEvent) {
-        if (event.key !== "Escape") return;
-        details.open = false;
-        details.querySelector("summary")?.focus();
-        return;
-      }
-      if (!details.contains(event.target as Node)) details.open = false;
-    };
-    document.addEventListener("keydown", close);
-    document.addEventListener("pointerdown", close);
-    return () => {
-      document.removeEventListener("keydown", close);
-      document.removeEventListener("pointerdown", close);
-    };
-  }, []);
+  useDismissableDetails(detailsRef);
 
   return (
     <details ref={detailsRef} className="group relative max-w-full min-w-0">
@@ -57,7 +39,7 @@ export function SortMenu({ current, hrefFor }: SortMenuProps) {
       </summary>
       <ul
         aria-label="დალაგების ვარიანტები"
-        className="absolute right-0 z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-1.5 shadow-card-hover"
+        className="absolute right-0 z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-1.5 shadow-card-hover max-lg:fixed max-lg:inset-x-4 max-lg:top-auto max-lg:bottom-4 max-lg:z-[1300] max-lg:mx-auto max-lg:mt-0 max-lg:w-auto max-lg:max-w-md"
       >
         {SORT_OPTIONS.map((option) => {
           const active = option.value === current;

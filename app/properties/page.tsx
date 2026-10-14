@@ -10,6 +10,7 @@ import { ListingCard } from "@/components/properties/listing-card";
 import { TransactionTabs } from "@/components/properties/transaction-tabs";
 import { SearchFeedback } from "@/components/search/search-feedback";
 import { SortMenu } from "@/components/properties/sort-menu";
+import { SaveSearchButton } from "@/components/saved-searches/save-search-button";
 import {
   ListingFiltersForm,
   type ListingFilterFormValues,
@@ -17,6 +18,11 @@ import {
 import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { toMapListing } from "@/lib/map/map-listings";
+import {
+  canonicalSearchQuery,
+  describeSearch,
+  isSaveableSearch,
+} from "@/lib/saved-searches/saved-searches";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
 import { getCitiesPresentIn, getDistrictsPresentIn } from "@/lib/properties/cities";
@@ -213,6 +219,26 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   // Reset clears filters but keeps the view settings: sale/rent tab, display currency, list/map
   // view and sort order. The sort menu has its own "ნაგულისხმევი" option.
   const resetHref = buildListingsHref({ transaction: filters.transaction }, display, view, sort);
+  // Saved searches store the canonical, validated criteria (never the results, never the view).
+  const saveQuery = canonicalSearchQuery(filters, display, sort);
+  const searchDescription = describeSearch(filters, display, sort);
+  const ignoredForSave = [
+    ...(parsed.issues.length > 0
+      ? ["არასწორი ან შეუთავსებელი პარამეტრები (იხ. შენიშვნები ზემოთ)"]
+      : []),
+    ...(search && search.unrecognized.length > 0
+      ? [`ტექსტში ვერ ამოცნობილი სიტყვები: ${search.unrecognized.join(", ")}`]
+      : []),
+    ...(search?.notes.some(
+      (note) =>
+        note.code === "conflict" ||
+        note.code === "ambiguous-district" ||
+        note.code === "number-without-meaning",
+    )
+      ? ["ტექსტის ორაზროვანი ან ურთიერთსაწინააღმდეგო ნაწილები"]
+      : []),
+    ...(invalidSort ? ["არასწორი დალაგება"] : []),
+  ];
   const cardData = (item: (typeof matches)[number]) => ({
     price: getListingDisplayPrice(item, display, rateState),
     href: buildListingDetailHref(item.listing.id, display),
@@ -300,10 +326,21 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
               <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
             ) : null}
           </p>
-          {matches.length > 1 && (
-            // The key closes the menu after a sort link was followed.
-            <SortMenu key={sort} current={sort} hrefFor={sortHrefs} />
-          )}
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+            <SaveSearchButton
+              // The key resets the panel when the search changes.
+              key={saveQuery}
+              query={saveQuery}
+              suggestedName={searchDescription.suggestedName}
+              criteria={searchDescription.criteria}
+              ignored={ignoredForSave}
+              saveable={isSaveableSearch(filters)}
+            />
+            {matches.length > 1 && (
+              // The key closes the menu after a sort link was followed.
+              <SortMenu key={sort} current={sort} hrefFor={sortHrefs} />
+            )}
+          </div>
         </div>
 
         {sorted.notice === "rate-unavailable" && (
