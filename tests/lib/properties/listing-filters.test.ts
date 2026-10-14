@@ -378,7 +378,7 @@ describe("countAdvancedFilters", () => {
         minBedrooms: 1,
         minFloor: 2,
         maxFloor: 5,
-        amenities: ["bed", "balcony"],
+        amenities: ["television", "balcony"],
       }),
     ).toBe(4);
   });

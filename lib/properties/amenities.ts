@@ -46,7 +46,6 @@ export const AMENITIES: readonly AmenityDefinition[] = [
   },
   { key: "furniture", label: "ავეჯი", group: "listing" },
   { key: "television", label: "ტელევიზორი", group: "listing" },
-  { key: "bed", label: "საწოლი", group: "listing" },
   { key: "refrigerator", label: "მაცივარი", group: "listing" },
   { key: "washingMachine", label: "სარეცხი მანქანა", group: "listing" },
   { key: "airConditioning", label: "კონდიციონერი", group: "listing" },

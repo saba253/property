@@ -19,7 +19,7 @@ const item: ListingWithProperty = {
     transactionType: "sale",
     askingPrice: { amount: 1, currency: "USD" },
     status: "active",
-    equipment: { refrigerator: "yes", television: "no", bed: "unknown" },
+    equipment: { refrigerator: "yes", television: "no", washingMachine: "unknown" },
     dataSource: "demo",
   },
   property: {
@@ -34,9 +34,9 @@ const item: ListingWithProperty = {
 };
 
 describe("AMENITIES", () => {
-  it("lists the seventeen supported characteristics once each, with Georgian labels", () => {
-    expect(AMENITIES).toHaveLength(17);
-    expect(new Set(AMENITIES.map((amenity) => amenity.key)).size).toBe(17);
+  it("lists the sixteen supported characteristics once each, with Georgian labels", () => {
+    expect(AMENITIES).toHaveLength(16);
+    expect(new Set(AMENITIES.map((amenity) => amenity.key)).size).toBe(16);
     for (const amenity of AMENITIES) {
       expect(amenity.label).toMatch(/[ა-ჿ]/);
     }
@@ -60,7 +60,6 @@ describe("AMENITIES", () => {
     expect(byGroup("listing")).toEqual([
       "furniture",
       "television",
-      "bed",
       "refrigerator",
       "washingMachine",
       "airConditioning",
@@ -88,7 +87,7 @@ describe("getAmenityStatus", () => {
   it("treats missing information as unknown, never as no", () => {
     expect(getAmenityStatus(item, "parking")).toBe("unknown");
     expect(getAmenityStatus(item, "dishwasher")).toBe("unknown");
-    expect(getAmenityStatus(item, "bed")).toBe("unknown");
+    expect(getAmenityStatus(item, "washingMachine")).toBe("unknown");
   });
 
   it("treats a completely missing record as unknown", () => {
@@ -111,7 +110,7 @@ describe("hasAllAmenities", () => {
 
   it("does not count unknown as a match", () => {
     expect(hasAllAmenities(item, ["parking"])).toBe(false);
-    expect(hasAllAmenities(item, ["bed"])).toBe(false);
+    expect(hasAllAmenities(item, ["washingMachine"])).toBe(false);
   });
 
   it("matches everything when nothing is selected", () => {
@@ -139,7 +138,7 @@ describe("groupAmenitiesByStatus", () => {
     const equipment = groupAmenitiesByStatus(item, "listing");
     expect(equipment.yes.map((amenity) => amenity.key)).toEqual(["refrigerator"]);
     expect(equipment.no.map((amenity) => amenity.key)).toEqual(["television"]);
-    expect(equipment.unknown).toHaveLength(5);
+    expect(equipment.unknown).toHaveLength(4);
   });
 });
 

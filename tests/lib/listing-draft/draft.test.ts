@@ -132,8 +132,8 @@ describe("property-type specific fields", () => {
     expect(apartment).toContain("elevator");
     expect(house).not.toContain("elevator");
     expect(apartment).not.toContain("topFloor");
-    expect(apartment).toHaveLength(16);
-    expect(house).toHaveLength(15);
+    expect(apartment).toHaveLength(15);
+    expect(house).toHaveLength(14);
   });
 });
 

@@ -49,13 +49,7 @@ export type PropertyFeatureKey =
 
 /** Movable equipment included in a particular offer. It belongs to the Listing. */
 export type ListingEquipmentKey =
-  | "furniture"
-  | "television"
-  | "bed"
-  | "refrigerator"
-  | "washingMachine"
-  | "airConditioning"
-  | "dishwasher";
+  "furniture" | "television" | "refrigerator" | "washingMachine" | "airConditioning" | "dishwasher";
 
 /**
  * Characteristics calculated from other facts instead of being stored, so they can never

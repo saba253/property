@@ -261,7 +261,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "yes",
@@ -287,7 +286,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "no",
@@ -305,7 +303,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "yes",
@@ -323,7 +320,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "no",
       television: "no",
-      bed: "no",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "yes",
@@ -361,7 +357,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "yes",
@@ -380,7 +375,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
       airConditioning: "yes",
@@ -399,7 +393,6 @@ export const demoListings: readonly Listing[] = [
     equipment: {
       furniture: "yes",
       television: "yes",
-      bed: "yes",
       refrigerator: "yes",
       washingMachine: "yes",
     },
