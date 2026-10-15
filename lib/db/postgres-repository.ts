@@ -1,0 +1,222 @@
+import { areaRange } from "@/lib/analytics/comparables";
+import { DataBackendUnavailableError } from "@/lib/db/config";
+import {
+  LISTING_COLUMNS,
+  LISTING_FROM,
+  SqlParams,
+  filterConditions,
+  orderBySql,
+  priceConditions,
+} from "@/lib/db/listing-query";
+import {
+  type FeatureRow,
+  type ImageRow,
+  type ListingRow,
+  mapImageRow,
+  mapListingRow,
+} from "@/lib/db/mappers";
+import type { SqlClient } from "@/lib/db/sql-client";
+import { findCityByName } from "@/lib/properties/cities";
+import { getGalleryOrder, selectCoverImage } from "@/lib/properties/listing-images";
+import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
+import {
+  type ListingCover,
+  type ListingRepository,
+  type ListingSearchQuery,
+  PUBLIC_LISTING_STATUSES,
+  normalizePage,
+} from "@/lib/repository/listing-repository";
+
+export type PostgresRepositoryOptions = {
+  /** Data sources that may be shown. Only "demo" exists today; real data is never mixed in. */
+  dataSources?: readonly string[];
+  /** Called with the original error when a query fails (server-side logging). */
+  onError?: (error: unknown) => void;
+};
+
+/**
+ * ListingRepository in PostgreSQL. Filtering, sorting, counting and paging happen in the
+ * database; only the requested page is loaded. Comparables are pre-selected in SQL and the final
+ * rules and statistics stay in lib/analytics (shared with the memory backend).
+ */
+export function createPostgresRepository(
+  client: SqlClient,
+  { dataSources = ["demo"], onError }: PostgresRepositoryOptions = {},
+): ListingRepository {
+  async function query<Row extends object>(text: string, params: readonly unknown[]) {
+    try {
+      return (await client.query<Row>(text, params)).rows;
+    } catch (error) {
+      onError?.(error);
+      throw new DataBackendUnavailableError(undefined, { cause: error });
+    }
+  }
+
+  /** Loads characteristics for the given rows and maps them, keeping the row order. */
+  async function hydrate(rows: readonly ListingRow[]): Promise<ListingWithProperty[]> {
+    if (rows.length === 0) return [];
+    const [features, equipment] = await Promise.all([
+      query<FeatureRow>(
+        "SELECT property_id AS owner_id, feature_key AS key, status FROM property_features WHERE property_id = ANY($1::text[]) ORDER BY feature_key",
+        [[...new Set(rows.map((row) => row.property_id))]],
+      ),
+      query<FeatureRow>(
+        "SELECT listing_id AS owner_id, equipment_key AS key, status FROM listing_equipment WHERE listing_id = ANY($1::text[]) ORDER BY equipment_key",
+        [rows.map((row) => row.id)],
+      ),
+    ]);
+    const group = (list: FeatureRow[]) => {
+      const map = new Map<string, FeatureRow[]>();
+      for (const row of list) map.set(row.owner_id, [...(map.get(row.owner_id) ?? []), row]);
+      return map;
+    };
+    const byProperty = group(features);
+    const byListing = group(equipment);
+    return rows.map((row) =>
+      mapListingRow(row, byProperty.get(row.property_id), byListing.get(row.id)),
+    );
+  }
+
+  async function activeListings(extraWhere = "", extraParams?: SqlParams) {
+    const params = extraParams ?? new SqlParams();
+    const sources = params.add(dataSources);
+    const rows = await query<ListingRow>(
+      `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
+       WHERE l.status = 'active' AND l.data_source = ANY(${sources}::text[]) ${extraWhere}
+       ORDER BY l.seq`,
+      params.values,
+    );
+    return hydrate(rows);
+  }
+
+  async function count({ filters, display, rateState }: Omit<ListingSearchQuery, "sort" | "page">) {
+    const params = new SqlParams();
+    const where = filterConditions(filters, dataSources, params).join(" AND ");
+    const { priceOk, notComparable } = priceConditions(filters, display, rateState, params);
+    const [row] = await query<{ total: number; not_comparable: number; currencies: number }>(
+      `SELECT count(*) FILTER (WHERE ${priceOk})::int AS total,
+              count(*) FILTER (WHERE ${notComparable})::int AS not_comparable,
+              count(DISTINCT l.asking_currency) FILTER (WHERE ${priceOk})::int AS currencies
+       ${LISTING_FROM} WHERE ${where}`,
+      params.values,
+    );
+    return row;
+  }
+
+  return {
+    backend: "postgres",
+
+    async getListingById(id) {
+      const rows = await query<ListingRow>(
+        `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
+         WHERE l.id = $1 AND l.status = ANY($2::text[]) AND l.data_source = ANY($3::text[])`,
+        [id, PUBLIC_LISTING_STATUSES, dataSources],
+      );
+      return (await hydrate(rows))[0] ?? null;
+    },
+
+    async getListingIds() {
+      const rows = await query<{ id: string }>(
+        `SELECT id FROM listings WHERE status = ANY($1::text[]) AND data_source = ANY($2::text[]) ORDER BY seq`,
+        [PUBLIC_LISTING_STATUSES, dataSources],
+      );
+      return rows.map((row) => row.id);
+    },
+
+    getActiveListings: () => activeListings(),
+
+    async getSearchFacets() {
+      const rows = await query<{ city: string; district: string; sale: number; rent: number }>(
+        `SELECT c.name AS city, p.district,
+                count(*) FILTER (WHERE l.transaction_type = 'sale')::int AS sale,
+                count(*) FILTER (WHERE l.transaction_type = 'rent')::int AS rent
+         ${LISTING_FROM}
+         WHERE l.status = 'active' AND l.data_source = ANY($1::text[])
+         GROUP BY c.name, p.district ORDER BY min(l.seq)`,
+        [dataSources],
+      );
+      return {
+        cityNames: [...new Set(rows.map((row) => row.city))],
+        districts: rows.map((row) => ({ name: row.district, city: row.city })),
+        totals: {
+          sale: rows.reduce((sum, row) => sum + row.sale, 0),
+          rent: rows.reduce((sum, row) => sum + row.rent, 0),
+        },
+      };
+    },
+
+    async countListings(search) {
+      const { total, not_comparable } = await count(search);
+      return { total, notComparableCount: not_comparable };
+    },
+
+    async searchListings(search) {
+      const { total, not_comparable, currencies } = await count(search);
+      const page = normalizePage(search.page);
+      const params = new SqlParams();
+      const where = filterConditions(search.filters, dataSources, params).join(" AND ");
+      const { priceOk } = priceConditions(search.filters, search.display, search.rateState, params);
+      const order = orderBySql(search.sort, search.rateState, currencies, params);
+      const rows = await query<ListingRow>(
+        `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
+         WHERE ${where} AND ${priceOk}
+         ORDER BY ${order ?? "l.seq ASC"}
+         LIMIT ${params.add(page.limit)}::int OFFSET ${params.add(page.offset)}::int`,
+        params.values,
+      );
+      return {
+        items: await hydrate(rows),
+        total,
+        notComparableCount: not_comparable,
+        page,
+        sortApplied: order === null ? "default" : search.sort,
+        sortNotice: order === null ? "rate-unavailable" : null,
+      };
+    },
+
+    async getListingImages(listingId) {
+      const rows = await query<ImageRow>(
+        "SELECT * FROM listing_images WHERE listing_id = $1 ORDER BY sort_order, id",
+        [listingId],
+      );
+      return getGalleryOrder(rows.map(mapImageRow));
+    },
+
+    async getListingCovers(listingIds) {
+      const rows = await query<ImageRow>(
+        "SELECT * FROM listing_images WHERE listing_id = ANY($1::text[]) ORDER BY sort_order, id",
+        [[...listingIds]],
+      );
+      const covers: Record<string, ListingCover> = {};
+      for (const id of listingIds) {
+        const images = rows.filter((row) => row.listing_id === id).map(mapImageRow);
+        covers[id] = { coverImage: selectCoverImage(images), imageCount: images.length };
+      }
+      return covers;
+    },
+
+    async findComparableCandidates(subject) {
+      const { listing, property } = subject;
+      const { min, max } = areaRange(property.areaSqm);
+      // Same city by name, as in selectComparables; an unknown city has no stored listings.
+      const citySlug = findCityByName(property.city.trim())?.slug;
+      if (!citySlug) return [];
+      const params = new SqlParams();
+      const conditions = [
+        `l.transaction_type = ${params.add(listing.transactionType)}`,
+        listing.transactionType === "rent"
+          ? `l.rent_period = ${params.add(listing.rentPeriod)}`
+          : "l.rent_period IS NULL",
+        `p.type = ${params.add(property.type)}`,
+        `p.city_slug = ${params.add(citySlug)}`,
+        // The numeric range (slightly wider) lets PostgreSQL use properties_city_type_area; the
+        // float8 comparison then applies exactly the JavaScript rule (isWithinAreaRange).
+        `p.area_sqm BETWEEN ${params.add(String(Math.floor(min * 100) / 100 - 0.01))}::numeric AND ${params.add(String(Math.ceil(max * 100) / 100 + 0.01))}::numeric`,
+        `p.area_sqm::float8 BETWEEN ${params.add(min)}::float8 AND ${params.add(max)}::float8`,
+        `l.id <> ${params.add(listing.id)}`,
+        `l.property_id <> ${params.add(listing.propertyId)}`,
+      ];
+      return activeListings(`AND ${conditions.join(" AND ")}`, params);
+    },
+  };
+}

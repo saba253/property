@@ -8,10 +8,7 @@ import { pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingCover,
-} from "@/lib/properties/get-demo-listing";
+import { getActiveListings, getListingCovers } from "@/lib/data/listings";
 import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
 
 export const metadata: Metadata = {
@@ -28,12 +25,14 @@ export const metadata: Metadata = {
 async function SavedListings({ searchParams }: Pick<PageProps<"/favorites">, "searchParams">) {
   const { display } = parseDisplayCurrency(await searchParams);
   const rateState = await getExchangeRateState();
-  const cards = getActiveDemoListingsWithProperties().map((item) => ({
+  const listings = await getActiveListings();
+  const covers = await getListingCovers(listings.map((item) => item.listing.id));
+  const cards = listings.map((item) => ({
     id: item.listing.id,
     card: (
       <ListingCard
         {...item}
-        {...getDemoListingCover(item.listing.id)}
+        {...covers[item.listing.id]}
         price={getListingDisplayPrice(item, display, rateState)}
         href={buildListingDetailHref(item.listing.id, display)}
       />

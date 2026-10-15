@@ -5,10 +5,7 @@ import { CompareTray } from "@/components/compare/compare-tray";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingCover,
-} from "@/lib/properties/get-demo-listing";
+import { getActiveListings, getListingCovers } from "@/lib/data/listings";
 import "./globals.css";
 
 // Noto Sans Georgian supports the Georgian script.
@@ -24,14 +21,16 @@ export const metadata: Metadata = {
     "უძრავი ქონების შედარებისა და განცხადებებში მითითებული ფასების გაგების პლატფორმა. პლატფორმა შემუშავების პროცესშია.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  // What the comparison tray and buttons need about each available listing (static demo data).
-  const compareCatalog = getActiveDemoListingsWithProperties().map(({ listing }) => ({
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // What the comparison tray and buttons need about each available listing (cached read).
+  const listings = await getActiveListings();
+  const covers = await getListingCovers(listings.map((item) => item.listing.id));
+  const compareCatalog = listings.map(({ listing }) => ({
     id: listing.id,
     title: listing.title,
     href: buildListingDetailHref(listing.id),
     transactionType: listing.transactionType,
-    coverImage: getDemoListingCover(listing.id).coverImage,
+    coverImage: covers[listing.id].coverImage,
   }));
 
   return (

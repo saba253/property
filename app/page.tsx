@@ -6,10 +6,7 @@ import { DEFAULT_DISPLAY_CURRENCY } from "@/lib/currency/exchange-rate";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingCover,
-} from "@/lib/properties/get-demo-listing";
+import { getFeaturedSaleListings, getListingCovers } from "@/lib/data/listings";
 
 const FEATURED_COUNT = 3;
 
@@ -30,9 +27,8 @@ const principles = [
 
 export default async function Home() {
   const rateState = await getExchangeRateState();
-  const featured = getActiveDemoListingsWithProperties()
-    .filter((item) => item.listing.transactionType === "sale")
-    .slice(0, FEATURED_COUNT);
+  const featured = await getFeaturedSaleListings(FEATURED_COUNT);
+  const covers = await getListingCovers(featured.map((item) => item.listing.id));
 
   return (
     <main id="top" className="flex-1">
@@ -61,7 +57,7 @@ export default async function Home() {
             <li key={item.listing.id}>
               <ListingCard
                 {...item}
-                {...getDemoListingCover(item.listing.id)}
+                {...covers[item.listing.id]}
                 price={getListingDisplayPrice(item, DEFAULT_DISPLAY_CURRENCY, rateState)}
                 href={buildListingDetailHref(item.listing.id)}
               />

@@ -8,10 +8,7 @@ import { pageContainer } from "@/components/ui/styles";
 import { buildComparisonColumns } from "@/lib/compare/comparison";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingCover,
-} from "@/lib/properties/get-demo-listing";
+import { getActiveListings, getListingCovers } from "@/lib/data/listings";
 import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
 
 export const metadata: Metadata = {
@@ -27,11 +24,15 @@ export const metadata: Metadata = {
 async function Comparison({ searchParams }: Pick<PageProps<"/compare">, "searchParams">) {
   const { display } = parseDisplayCurrency(await searchParams);
   const rateState = await getExchangeRateState();
+  // The selection lives in the browser, so columns are prepared for every available listing
+  // (a small catalog today; a large inventory needs a request for the selected ids only).
+  const listings = await getActiveListings();
+  const covers = await getListingCovers(listings.map((item) => item.listing.id));
   const columns = buildComparisonColumns(
-    getActiveDemoListingsWithProperties(),
+    listings,
     (item) => ({
       href: buildListingDetailHref(item.listing.id, display),
-      coverImage: getDemoListingCover(item.listing.id).coverImage,
+      coverImage: covers[item.listing.id].coverImage,
     }),
     display,
     rateState,

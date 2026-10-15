@@ -16,20 +16,17 @@ import {
 } from "@/components/properties/listing-filters-form";
 import { buttonPrimary, pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
+import { getListingCovers, getSearchFacets, searchListings } from "@/lib/data/listings";
 import { toMapListing } from "@/lib/map/map-listings";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { getAmenityDefinition } from "@/lib/properties/amenities";
-import { getCitiesPresentIn, getDistrictsPresentIn } from "@/lib/properties/cities";
+import { getCitiesPresentIn } from "@/lib/properties/cities";
 import { parseSearchQuery } from "@/lib/search/parse-search-query";
 import {
   buildListingDetailHref,
   buildListingsHref,
   getFilterChips,
 } from "@/lib/properties/filter-chips";
-import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingCover,
-} from "@/lib/properties/get-demo-listing";
 import {
   type CountFilterKey,
   type FilterIssue,
@@ -38,7 +35,6 @@ import {
   type RawQuery,
   convertBudgetForDisplay,
   countAdvancedFilters,
-  filterListings,
   getTransaction,
   hasActiveFilters,
   parseDisplayCurrency,
@@ -46,12 +42,7 @@ import {
   parseNonNegativeNumber,
   switchTransaction,
 } from "@/lib/properties/listing-filters";
-import {
-  SORT_OPTIONS,
-  type SortOption,
-  parseSort,
-  sortListings,
-} from "@/lib/properties/listing-sort";
+import { SORT_OPTIONS, type SortOption, parseSort } from "@/lib/properties/listing-sort";
 import { type ListingsView, parseListingsView } from "@/lib/properties/listings-view";
 import type { Currency, TransactionType } from "@/lib/properties/types";
 
@@ -141,9 +132,10 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   const rawQuery = await searchParams;
   // One exchange-rate snapshot for the whole request: filtering and display both use it.
   const rateState = await getExchangeRateState();
-  const allItems = getActiveDemoListingsWithProperties();
-  const cities = getCitiesPresentIn(allItems.map((item) => item.property.city));
-  const districts = getDistrictsPresentIn(allItems.map((item) => item.property));
+  // Cities and districts of the available listings (from the repository, not the full inventory).
+  const facets = await getSearchFacets();
+  const cities = getCitiesPresentIn(facets.cityNames);
+  const districts = facets.districts;
 
   // Free-text search from the homepage (?q=...). Recognized terms become the same URL parameters
   // the filter form uses and go through the same validation below; words in the text win over
@@ -166,15 +158,12 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   // Sorting is a view setting like the display currency: every link below keeps it.
   const { sort, invalid: invalidSort } = parseSort(rawQuery);
   const { filters, display } = parsed;
-  const { matches: filtered, notComparableCount } = filterListings(
-    allItems,
-    filters,
-    display,
-    rateState,
-  );
-  // Filter first, then sort (same rate snapshot); list and map both show this order.
-  const sorted = sortListings(filtered, sort, rateState);
-  const matches = sorted.items;
+  // Filtering, sorting and paging happen in the repository (in memory or in PostgreSQL) with the
+  // same rate snapshot; list and map both show this order. One page of up to MAX_PAGE_SIZE.
+  const result = await searchListings({ filters, display, rateState, sort });
+  const { notComparableCount } = result;
+  const matches = result.items;
+  const covers = await getListingCovers(matches.map((item) => item.listing.id));
   const values = toFormValues(query, parsed);
   const filtersActive = hasActiveFilters(filters);
   const chips = getFilterChips(filters, display, view, sort);
@@ -202,9 +191,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   const resultsIncomplete = notComparableCount > 0;
   const transaction = getTransaction(filters);
   // "Total" counts only listings of the chosen transaction type (sale and rent are separate).
-  const transactionTotal = allItems.filter(
-    (item) => item.listing.transactionType === transaction,
-  ).length;
+  const transactionTotal = facets.totals[transaction];
   // Switching sale/rent keeps compatible filters but drops the budget (see switchTransaction).
   const transactionHrefs: Record<TransactionType, string> = {
     sale: buildListingsHref(switchTransaction(filters, "sale"), display, view, sort),
@@ -216,7 +203,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   const cardData = (item: (typeof matches)[number]) => ({
     price: getListingDisplayPrice(item, display, rateState),
     href: buildListingDetailHref(item.listing.id, display),
-    ...getDemoListingCover(item.listing.id),
+    ...covers[item.listing.id],
   });
 
   return (
@@ -292,9 +279,13 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-base font-semibold text-ink">
-            ნაპოვნია {matches.length} განცხადება
+            ნაპოვნია {result.total} განცხადება
             {filtersActive ? (
               <span className="font-normal text-muted"> (სულ {transactionTotal})</span>
+            ) : null}
+            {result.total > matches.length ? (
+              // Pagination controls come with larger inventories; never hide that this is a part.
+              <span className="font-normal text-muted"> · ნაჩვენებია პირველი {matches.length}</span>
             ) : null}
             {resultsIncomplete ? (
               <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
@@ -308,7 +299,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           </div>
         </div>
 
-        {sorted.notice === "rate-unavailable" && (
+        {result.sortNotice === "rate-unavailable" && (
           <p
             role="note"
             className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"

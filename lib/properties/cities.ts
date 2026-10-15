@@ -13,6 +13,11 @@ export function findCityBySlug(slug: string): City | null {
   return knownCities.find((city) => city.slug === slug) ?? null;
 }
 
+/** The known city with this Georgian name (as in Property.city), or null. */
+export function findCityByName(name: string): City | null {
+  return knownCities.find((city) => city.name === name) ?? null;
+}
+
 /** Known cities that appear in the given city names, in `knownCities` order. */
 export function getCitiesPresentIn(cityNames: readonly string[]): City[] {
   const present = new Set(cityNames);

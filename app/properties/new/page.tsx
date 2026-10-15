@@ -3,8 +3,7 @@ import { ListingDraftWizard } from "@/components/listing-draft/listing-draft-wiz
 import { DemoNotice } from "@/components/properties/demo-label";
 import { pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
-import { getDistrictsPresentIn } from "@/lib/properties/cities";
-import { demoProperties } from "@/lib/properties/demo-data";
+import { getSearchFacets } from "@/lib/data/listings";
 
 export const metadata: Metadata = {
   title: "განცხადების მომზადება (დემო) | Property Intelligence",
@@ -19,7 +18,7 @@ export const metadata: Metadata = {
  */
 export default async function NewListingPage() {
   const rateState = await getExchangeRateState();
-  const districts = getDistrictsPresentIn(demoProperties);
+  const { districts } = await getSearchFacets();
 
   return (
     <main className={`${pageContainer} flex-1 py-6 sm:py-10`}>

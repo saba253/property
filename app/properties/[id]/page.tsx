@@ -27,11 +27,11 @@ import { knownCities } from "@/lib/properties/cities";
 import { buildListingsHref } from "@/lib/properties/filter-chips";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import {
-  getActiveDemoListingsWithProperties,
-  getDemoListingIds,
-  getDemoListingImages,
-  getDemoListingWithProperty,
-} from "@/lib/properties/get-demo-listing";
+  findComparableCandidates,
+  getListing,
+  getListingIds,
+  getListingImages,
+} from "@/lib/data/listings";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getStructuralFacts } from "@/lib/properties/property-facts";
 
@@ -46,13 +46,13 @@ export const ensureStatic = "navigation";
 // This turns off only the instant-navigation check; ensureStatic's static check still applies.
 export const instant = false;
 
-export function generateStaticParams() {
-  return getDemoListingIds().map((id) => ({ id }));
+export async function generateStaticParams() {
+  return (await getListingIds()).map((id) => ({ id }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const data = getDemoListingWithProperty(id);
+  const data = await getListing(id);
 
   return {
     title: data ? `${data.listing.title} | Property Intelligence` : "Property Intelligence",
@@ -63,14 +63,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function PropertyDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const data = getDemoListingWithProperty(id);
+  const data = await getListing(id);
 
   if (!data) {
     notFound();
   }
 
   const { listing, property } = data;
-  const images = getDemoListingImages(listing.id);
+  const images = await getListingImages(listing.id);
   const mapPosition = resolveMapPosition(property);
   const { currency } = listing.askingPrice;
   // One rate snapshot; both currencies are prepared so the client can switch without a fetch.
@@ -80,11 +80,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     GEL: getListingDisplayPrice(data, "GEL", rateState),
   };
   // Comparables are selected once per render, with the same rate snapshot as the prices.
-  const priceContext = getAskingPriceContext(
-    data,
-    getActiveDemoListingsWithProperties(),
-    rateState,
-  );
+  const priceContext = getAskingPriceContext(data, await findComparableCandidates(data), rateState);
 
   // Unknown facts are shown as "not specified"; nothing is invented to fill gaps.
   // City and district are shown under the title.
