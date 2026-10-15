@@ -33,6 +33,15 @@ describe("data access boundaries", () => {
     }
   });
 
+  it("sends no listing catalog with every page and keeps the API on the data layer", () => {
+    // The layout renders on every page; the comparison tray loads its few listings itself.
+    expect(source(join(root, "app", "layout.tsx"))).not.toMatch(/@\/lib\/(data|repository)\//);
+    const route = source(join(root, "app", "api", "listings", "summaries", "route.ts"));
+    expect(route).toContain('from "@/lib/data/listings"');
+    expect(route).not.toMatch(/from "(pg|@\/lib\/db\/[^"]+)"/);
+    expect(route).not.toMatch(/export (async )?function (PUT|PATCH|DELETE)/);
+  });
+
   it("marks the page data module as server-only", () => {
     expect(source(join(root, "lib", "data", "listings.ts"))).toMatch(/^import "server-only";/);
   });

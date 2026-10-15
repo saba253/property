@@ -4,6 +4,7 @@ import {
   LISTING_COLUMNS,
   LISTING_FROM,
   SqlParams,
+  displayAmountSql,
   filterConditions,
   orderBySql,
   priceConditions,
@@ -16,6 +17,7 @@ import {
   mapListingRow,
 } from "@/lib/db/mappers";
 import type { SqlClient } from "@/lib/db/sql-client";
+import { hasPriceFilter } from "@/lib/properties/listing-filters";
 import { findCityByName } from "@/lib/properties/cities";
 import { getGalleryOrder, selectCoverImage } from "@/lib/properties/listing-images";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
@@ -24,6 +26,8 @@ import {
   type ListingRepository,
   type ListingSearchQuery,
   PUBLIC_LISTING_STATUSES,
+  COUNT_LIMIT,
+  normalizeBatchIds,
   normalizePage,
 } from "@/lib/repository/listing-repository";
 
@@ -89,18 +93,46 @@ export function createPostgresRepository(
     return hydrate(rows);
   }
 
-  async function count({ filters, display, rateState }: Omit<ListingSearchQuery, "sort" | "page">) {
+  type CountQuery = Omit<ListingSearchQuery, "sort" | "page">;
+
+  /** Matches counted up to COUNT_LIMIT + 1 (the query stops there instead of joining everything). */
+  async function boundedTotal({ filters, display, rateState }: CountQuery) {
     const params = new SqlParams();
     const where = filterConditions(filters, dataSources, params).join(" AND ");
-    const { priceOk, notComparable } = priceConditions(filters, display, rateState, params);
-    const [row] = await query<{ total: number; not_comparable: number; currencies: number }>(
-      `SELECT count(*) FILTER (WHERE ${priceOk})::int AS total,
-              count(*) FILTER (WHERE ${notComparable})::int AS not_comparable,
-              count(DISTINCT l.asking_currency) FILTER (WHERE ${priceOk})::int AS currencies
-       ${LISTING_FROM} WHERE ${where}`,
+    const { priceOk } = priceConditions(filters, display, rateState, params);
+    const [{ n }] = await query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM (
+         SELECT 1 ${LISTING_FROM} WHERE ${where} AND ${priceOk}
+         LIMIT ${params.add(COUNT_LIMIT + 1)}::int
+       ) AS matches`,
       params.values,
     );
-    return row;
+    return { total: Math.min(n, COUNT_LIMIT), totalIsExact: n <= COUNT_LIMIT };
+  }
+
+  /** Listings priced in the other currency while no rate is available (budget searches only). */
+  async function notComparableCount({ filters, display, rateState }: CountQuery) {
+    if (!hasPriceFilter(filters) || rateState.status === "available") return 0;
+    const params = new SqlParams();
+    const where = filterConditions(filters, dataSources, params).join(" AND ");
+    const amount = displayAmountSql(display, rateState, params);
+    const [{ n }] = await query<{ n: number }>(
+      `SELECT count(*)::int AS n ${LISTING_FROM} WHERE ${where} AND ${amount} IS NULL`,
+      params.values,
+    );
+    return n;
+  }
+
+  /** Number of original currencies among the matches (needed for a price sort without a rate). */
+  async function currencyCount({ filters, display, rateState }: CountQuery) {
+    const params = new SqlParams();
+    const where = filterConditions(filters, dataSources, params).join(" AND ");
+    const { priceOk } = priceConditions(filters, display, rateState, params);
+    const [{ c }] = await query<{ c: number }>(
+      `SELECT count(DISTINCT l.asking_currency)::int AS c ${LISTING_FROM} WHERE ${where} AND ${priceOk}`,
+      params.values,
+    );
+    return c;
   }
 
   return {
@@ -113,6 +145,20 @@ export function createPostgresRepository(
         [id, PUBLIC_LISTING_STATUSES, dataSources],
       );
       return (await hydrate(rows))[0] ?? null;
+    },
+
+    async getListingsByIds(ids) {
+      const wanted = normalizeBatchIds(ids);
+      if (wanted.length === 0) return [];
+      const rows = await query<ListingRow>(
+        `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
+         WHERE l.id = ANY($1::text[]) AND l.status = ANY($2::text[]) AND l.data_source = ANY($3::text[])`,
+        [wanted, PUBLIC_LISTING_STATUSES, dataSources],
+      );
+      const byId = new Map((await hydrate(rows)).map((item) => [item.listing.id, item]));
+      return wanted
+        .map((id) => byId.get(id))
+        .filter((item): item is ListingWithProperty => item !== undefined);
     },
 
     async getListingIds() {
@@ -146,29 +192,46 @@ export function createPostgresRepository(
     },
 
     async countListings(search) {
-      const { total, not_comparable } = await count(search);
-      return { total, notComparableCount: not_comparable };
+      const [total, notComparable] = await Promise.all([
+        boundedTotal(search),
+        notComparableCount(search),
+      ]);
+      return { ...total, notComparableCount: notComparable };
     },
 
     async searchListings(search) {
-      const { total, not_comparable, currencies } = await count(search);
       const page = normalizePage(search.page);
+      // The currency mix matters only for a price sort without an exchange rate.
+      const priceSort = search.sort !== "default" && !search.sort.startsWith("area_");
+      const currencies =
+        priceSort && search.rateState.status !== "available" ? await currencyCount(search) : 1;
       const params = new SqlParams();
       const where = filterConditions(search.filters, dataSources, params).join(" AND ");
       const { priceOk } = priceConditions(search.filters, search.display, search.rateState, params);
       const order = orderBySql(search.sort, search.rateState, currencies, params);
+      // One extra row tells whether a next page exists.
       const rows = await query<ListingRow>(
         `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
          WHERE ${where} AND ${priceOk}
          ORDER BY ${order ?? "l.seq ASC"}
-         LIMIT ${params.add(page.limit)}::int OFFSET ${params.add(page.offset)}::int`,
+         LIMIT ${params.add(page.limit + 1)}::int OFFSET ${params.add(page.offset)}::int`,
         params.values,
       );
+      const hasNextPage = rows.length > page.limit;
+      // A page that is not full and not past the end already gives the exact total; only larger
+      // result sets (or a page past the end) need the bounded count query.
+      const known = !hasNextPage && (rows.length > 0 || page.offset === 0);
+      const [counted, notComparable] = await Promise.all([
+        known ? { total: page.offset + rows.length, totalIsExact: true } : boundedTotal(search),
+        notComparableCount(search),
+      ]);
       return {
-        items: await hydrate(rows),
-        total,
-        notComparableCount: not_comparable,
+        items: await hydrate(rows.slice(0, page.limit)),
+        total: Math.min(counted.total, COUNT_LIMIT),
+        totalIsExact: counted.totalIsExact && counted.total <= COUNT_LIMIT,
+        notComparableCount: notComparable,
         page,
+        hasNextPage,
         sortApplied: order === null ? "default" : search.sort,
         sortNotice: order === null ? "rate-unavailable" : null,
       };
@@ -185,7 +248,7 @@ export function createPostgresRepository(
     async getListingCovers(listingIds) {
       const rows = await query<ImageRow>(
         "SELECT * FROM listing_images WHERE listing_id = ANY($1::text[]) ORDER BY sort_order, id",
-        [[...listingIds]],
+        [normalizeBatchIds(listingIds)],
       );
       const covers: Record<string, ListingCover> = {};
       for (const id of listingIds) {

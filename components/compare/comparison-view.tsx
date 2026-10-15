@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { CompareIcon } from "@/components/compare/compare-button";
-import { useComparison } from "@/components/compare/compare-state";
+import { useCompareActions, useComparedIds } from "@/components/compare/compare-state";
+import { SelectionUrlSync } from "@/components/storage/selection-url-sync";
 import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
 import { buttonPrimary } from "@/components/ui/styles";
 import {
@@ -11,6 +12,7 @@ import {
   getComparisonReadiness,
   pruneComparison,
 } from "@/lib/compare/compare-selection";
+import type { TransactionType } from "@/lib/properties/types";
 import {
   CELL_TEXT,
   type CompareCell,
@@ -85,20 +87,33 @@ function EmptyState({ selectedCount }: { selectedCount: number }) {
  * server with the shared price and fact functions; this component only picks the selected ones,
  * hides rows that apply to none of them, and marks the lowest/highest numbers neutrally.
  */
-export function ComparisonView({ columns }: { columns: readonly ComparisonColumn[] }) {
-  const { ids, status, remove, clear, lookup } = useComparison();
+export function ComparisonView({
+  columns,
+  requestedIds,
+}: {
+  columns: readonly ComparisonColumn[];
+  requestedIds: readonly string[];
+}) {
+  const { ids, status } = useComparedIds();
+  const { remove, clear } = useCompareActions();
+  const byId = new Map(columns.map((column) => [column.id, column]));
+  // Transaction types come from the server-prepared columns of the requested ids.
+  const lookup = (id: string): TransactionType | undefined => byId.get(id)?.transaction;
+  const requested = new Set(requestedIds);
+  const pending = ids.some((id) => !requested.has(id));
+  const sync = <SelectionUrlSync ids={ids} status={status} requestedIds={requestedIds} />;
 
-  if (status === "loading") {
+  if (status === "loading" || pending) {
     return (
       <p role="status" className="mt-8 text-sm text-muted">
         შედარება იტვირთება…
+        {sync}
       </p>
     );
   }
 
   const known = pruneComparison(ids, lookup);
   const readiness = getComparisonReadiness(known, lookup);
-  const byId = new Map(columns.map((column) => [column.id, column]));
   let selected = known.map((id) => byId.get(id)).filter((column) => column !== undefined);
   const mixed = !readiness.ready && readiness.reason === "mixed-transaction";
   if (mixed && selected.length > 0) {
@@ -106,7 +121,14 @@ export function ComparisonView({ columns }: { columns: readonly ComparisonColumn
     selected = selected.filter((column) => column.transaction === selected[0].transaction);
   }
 
-  if (selected.length < MIN_COMPARE) return <EmptyState selectedCount={selected.length} />;
+  if (selected.length < MIN_COMPARE) {
+    return (
+      <>
+        {sync}
+        <EmptyState selectedCount={selected.length} />
+      </>
+    );
+  }
 
   const rows = visibleRows(selected);
   const extremes: Partial<Record<ComparisonRowKey, Extremes | null>> = {
@@ -118,6 +140,7 @@ export function ComparisonView({ columns }: { columns: readonly ComparisonColumn
 
   return (
     <div className="mt-6">
+      {sync}
       {mixed && (
         <p
           role="alert"

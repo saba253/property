@@ -1,6 +1,7 @@
 "use client";
 
 import { useCompareActions, useIsCompared } from "@/components/compare/compare-state";
+import type { TransactionType } from "@/lib/properties/types";
 
 export const COMPARE_LABELS = {
   add: "შედარებაში დამატება",
@@ -26,6 +27,8 @@ function CheckIcon() {
 type CompareButtonProps = {
   listingId: string;
   title: string;
+  /** Sale or monthly rent; only listings of one type can be compared. */
+  transactionType: TransactionType;
   /** "chip": small pill (cards, result rows, previews). "inline": larger (detail page). */
   variant?: "chip" | "inline";
   className?: string;
@@ -41,6 +44,7 @@ type CompareButtonProps = {
 export function CompareButton({
   listingId,
   title,
+  transactionType,
   variant = "chip",
   className = "",
 }: CompareButtonProps) {
@@ -52,7 +56,7 @@ export function CompareButton({
   return (
     <button
       type="button"
-      onClick={() => (selected ? remove(listingId) : add(listingId))}
+      onClick={() => (selected ? remove(listingId) : void add(listingId, transactionType))}
       aria-pressed={selected}
       aria-label={`${action}: ${title}`}
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 ${size} ${

@@ -4,8 +4,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { HeartIcon } from "@/components/favorites/favorite-button";
 import { useFavorites } from "@/components/favorites/use-favorites";
+import { SelectionUrlSync } from "@/components/storage/selection-url-sync";
 import { buttonPrimary } from "@/components/ui/styles";
-import { resolveFavorites } from "@/lib/favorites/favorites";
+import { splitRequestedFavorites } from "@/lib/favorites/favorites";
 
 export type FavoriteCard = {
   id: string;
@@ -14,28 +15,39 @@ export type FavoriteCard = {
 };
 
 /**
- * Shows the saved listings (newest saved first) using cards rendered on the server for every
- * available listing. Removing a heart on this page updates the list at once. Saved ids whose
- * listing no longer exists are not shown and can be cleared.
+ * Shows the saved listings (newest saved first). The server renders cards only for the ids in the
+ * URL (`requestedIds`), which SelectionUrlSync keeps equal to the ids saved in this browser.
+ * Removing a heart updates the list at once. Saved ids the server could not find (removed or
+ * inactive listings) are reported and can be cleared; ids not requested yet are still loading.
  */
-export function FavoritesGrid({ cards }: { cards: readonly FavoriteCard[] }) {
+export function FavoritesGrid({
+  cards,
+  requestedIds,
+}: {
+  cards: readonly FavoriteCard[];
+  requestedIds: readonly string[];
+}) {
   const { ids, status, remove } = useFavorites();
   const byId = new Map(cards.map((item) => [item.id, item.card]));
-  const { available, missing } = resolveFavorites(
+  const { available, missing, pending } = splitRequestedFavorites(
     ids,
+    requestedIds,
     cards.map((item) => item.id),
   );
+  const sync = <SelectionUrlSync ids={ids} status={status} requestedIds={requestedIds} />;
 
-  if (status === "loading") {
+  if (status === "loading" || (pending && available.length === 0)) {
     return (
       <p role="status" className="mt-8 text-sm text-muted">
         რჩეულები იტვირთება…
+        {sync}
       </p>
     );
   }
 
   return (
     <div className="mt-6">
+      {sync}
       {status === "memory-only" && (
         <p
           role="note"

@@ -4,16 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CompareIcon } from "@/components/compare/compare-button";
 import { useComparison } from "@/components/compare/compare-state";
-import { pruneComparison } from "@/lib/compare/compare-selection";
 
 /**
  * Header link to /compare with the number of selected listings. The count appears only after
  * hydration (the server renders none), so server and client markup match. Text from `lg`.
  */
 export function HeaderCompareLink() {
-  const { ids, lookup } = useComparison();
+  const { available } = useComparison();
   const active = usePathname() === "/compare";
-  const count = pruneComparison(ids, lookup).length;
+  // Selected listings, minus any the server reported as no longer available.
+  const count = available.length;
 
   return (
     <Link

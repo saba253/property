@@ -8,7 +8,10 @@ import { pageContainer } from "@/components/ui/styles";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { getListingDisplayPrice } from "@/lib/pricing/display-price";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import { getActiveListings, getListingCovers } from "@/lib/data/listings";
+import { parseIdsParam } from "@/lib/api/listing-lookup";
+import { buildFavoritesPageHref } from "@/lib/compare/selection-urls";
+import { getListingCoversUncached, getListingsByIds } from "@/lib/data/listings";
+import { MAX_FAVORITES } from "@/lib/favorites/favorites";
 import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
 
 export const metadata: Metadata = {
@@ -18,15 +21,21 @@ export const metadata: Metadata = {
 };
 
 /**
- * Cards for every available listing are rendered on the server with the shared ListingCard; the
- * browser shows only the ones saved in this browser. Nothing about the visitor is sent to the
- * server: the saved ids never leave the browser.
+ * Cards only for the saved listings: the browser puts the saved ids in the URL (`?ids=`, kept in
+ * sync by SelectionUrlSync), and the server renders those with the shared ListingCard in one batch
+ * lookup. The ids are public listing ids (no account, no personal data); they are stored only in
+ * this browser and sent only to render this page.
  */
 async function SavedListings({ searchParams }: Pick<PageProps<"/favorites">, "searchParams">) {
-  const { display } = parseDisplayCurrency(await searchParams);
+  const query = await searchParams;
+  const { display } = parseDisplayCurrency(query);
+  // Only the listings saved in this browser, as carried in the URL (see SelectionUrlSync).
+  const requestedIds = parseIdsParam(query.ids, MAX_FAVORITES);
   const rateState = await getExchangeRateState();
-  const listings = await getActiveListings();
-  const covers = await getListingCovers(listings.map((item) => item.listing.id));
+  const listings = (await getListingsByIds(requestedIds)).filter(
+    (item) => item.listing.status === "active",
+  );
+  const covers = await getListingCoversUncached(listings.map((item) => item.listing.id));
   const cards = listings.map((item) => ({
     id: item.listing.id,
     card: (
@@ -45,10 +54,13 @@ async function SavedListings({ searchParams }: Pick<PageProps<"/favorites">, "se
         <DemoDisclosure />
         <CurrencyToggle
           current={display}
-          hrefFor={{ USD: "/favorites", GEL: "/favorites?display=GEL" }}
+          hrefFor={{
+            USD: buildFavoritesPageHref(requestedIds, "USD"),
+            GEL: buildFavoritesPageHref(requestedIds, "GEL"),
+          }}
         />
       </div>
-      <FavoritesGrid cards={cards} />
+      <FavoritesGrid cards={cards} requestedIds={requestedIds} />
     </>
   );
 }

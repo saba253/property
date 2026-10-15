@@ -1,6 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Markup tests run without Next.js' app router; the URL sync only needs a router to exist.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => null,
+}));
 import { COMPARE_LABELS, CompareButton } from "@/components/compare/compare-button";
 import { CompareTray } from "@/components/compare/compare-tray";
 import { ComparisonView } from "@/components/compare/comparison-view";
@@ -14,7 +20,11 @@ import { getDemoListingCover, getDemoListingWithProperty } from "@/lib/propertie
 describe("CompareButton markup", () => {
   it("is a native toggle button with a Georgian label, distinct from the heart", () => {
     const html = renderToStaticMarkup(
-      createElement(CompareButton, { listingId: "demo-listing-1", title: "დემო: ბინა ვაკეში" }),
+      createElement(CompareButton, {
+        listingId: "demo-listing-1",
+        title: "დემო: ბინა ვაკეში",
+        transactionType: "sale",
+      }),
     );
     expect(html).toMatch(/^<button type="button"/);
     expect(html).toContain('aria-pressed="false"');
@@ -47,7 +57,9 @@ describe("ListingCard actions", () => {
 describe("comparison UI before hydration", () => {
   it("renders no tray and a loading state instead of guessing the selection", () => {
     expect(renderToStaticMarkup(createElement(CompareTray))).toBe("");
-    const view = renderToStaticMarkup(createElement(ComparisonView, { columns: [] }));
+    const view = renderToStaticMarkup(
+      createElement(ComparisonView, { columns: [], requestedIds: [] }),
+    );
     expect(view).toContain("შედარება იტვირთება");
     expect(view).not.toContain("<table");
   });

@@ -76,9 +76,15 @@ fetched_at)` table filled by a scheduled job, still never converting stored aski
   rate, listings in the other currency are counted as not comparable.
 - Price sorts use unrounded USD with one rate. Without a rate and with mixed currencies, the
   default order is used and a notice is returned. Ties are broken by insertion order (`seq`).
-- Pagination is offset/limit (max 100 per page, offset ≤ 10,000) with a deterministic order.
-  Cursor pagination is **not** implemented. The UI shows the first page (≤ 100 results) and says
-  when there are more.
+- Pagination (Step 1.20) is offset/limit with a deterministic order (sort value, then `seq`):
+  `/properties?page=N`, 12 results per page, at most 100 per repository request, offset ≤
+  10,000 (page ≤ 834). Each page query fetches `limit + 1` rows to know whether a next page
+  exists. Cursor pagination is **not** implemented (offsets are fine at this depth; a keyset
+  cursor is the option for much deeper paging).
+- Counts are **bounded** (Step 1.20): exact up to `COUNT_LIMIT` (1,000), otherwise "1,000+"
+  (`totalIsExact: false`). When the first page is not full, its rows already give the exact total
+  and no count query runs. The "not comparable with the budget" count and the currency-mix check
+  run only during an exchange-rate outage, when they matter.
 
 `tests/lib/db/repository-parity.test.ts` and `synthetic-parity.test.ts` run the memory and SQL
 backends on the same data (the demo dataset and 400+ synthetic records) and require identical
@@ -105,20 +111,67 @@ are what matter:
 - Comparables: filtering on `city_slug` plus a numeric area range made PostgreSQL use
   `properties_city_type_area` (5,105 index rows instead of 66,667). Execution time fell from
   108 ms to 46 ms.
-- **Main remaining cost: the exact total count** (`ნაპოვნია N`) on broad searches. It joins every
-  match (~350 ms for 75,000 matches in PGlite). Options when real data arrives: cap the count
-  ("1,000+"), use an estimate, or cache counts per filter set. Replacing `count(DISTINCT
-currency)` with `min`/`max` was measured and gave no gain, so it was not kept.
+- Step 1.19 found the exact total count to be the main cost on broad searches (it joins every
+  match). Replacing `count(DISTINCT currency)` with `min`/`max` gave no gain and was not kept.
+
+### Step 1.20: bounded counts and fewer queries (measured)
+
+Same 100,000 synthetic rows in PGlite, median of 5 runs, Step 1.19 code → Step 1.20 code:
+
+| Query                                     | Before   | After           |
+| ----------------------------------------- | -------- | --------------- |
+| Broad count (all sale, ~71,000 matches)   | 113.7 ms | 3.8 ms          |
+| Broad search, page 1 (count + page)       | 117.2 ms | 12.2 ms         |
+| Broad search sorted by price              | 479.1 ms | 304.7 ms        |
+| City + amenity search (~8,000 matches)    | 103.7 ms | 14.1 ms         |
+| Narrow district + budget search           | 46.6 ms  | 16.9 ms         |
+| City + amenity with **0 matches** (count) | 51.9 ms  | 66.7 ms (worse) |
+| City + amenity with 0 matches (search)    | 409.5 ms | 343.0 ms        |
+
+Causes and remaining costs:
+
+- The budget search used to run a useless "not comparable" count even with an exchange rate
+  available (it can only find something during an outage); it now runs only then.
+- `LIMIT`-bounded counts are slower in one case: filters the planner believes match many rows
+  but that match none (in the synthetic data, "balcony" and "Tbilisi" never overlap). The page
+  query (`ORDER BY seq LIMIT 13`) has the same weakness and had it before. Real data rarely has
+  perfectly disjoint filters; watch it with real statistics.
+- Price sorts must sort every match by a rate-dependent expression (no index can hold it). A
+  future option: merge two currency-specific index scans (`asking_currency, asking_amount`).
+
+## Batch lookups (Step 1.20)
+
+`getListingsByIds(ids)` returns public listings for up to 100 ids in one query, in the requested
+order, each once; `getListingCovers(ids)` loads their images in one query. Used by:
+
+- `/favorites?ids=…` and `/compare?ids=…`: the browser's saved ids are put in the URL (replace,
+  no history entries; storage stays the source of truth and URL ids are never saved), and the
+  server renders only those listings.
+- `POST /api/listings/summaries` (read-only): the comparison tray loads titles, links, transaction
+  types and covers of its ≤ 4 selected listings. Validated JSON body (≤ 8 KB, 1–100 valid ids),
+  415/413/400 for bad input, 429 after 60 requests per minute per address (per process; add edge
+  rate limiting in production), `Cache-Control: no-store`, generic 503 on database errors. Only
+  active listings are returned; other ids are listed as `missing`, and only those are removed
+  from a selection (a network or database error never removes anything).
+
+The layout no longer sends a catalog of every listing with each page (−7 KB HTML per page with
+11 listings; the saving grows with the inventory).
 
 ## Comparables at scale
 
 `findComparableCandidates` pre-selects in SQL (active, same transaction and rent period, type,
 city, ±25% area, other property). `lib/analytics/comparables.ts` then applies the final rules:
 one listing per property, district first, minimum 5. Statistics are computed in TypeScript as
-before, so results are identical (parity test). When candidate sets become large, the median /
-min / max can move into one aggregate query (`percentile_cont(0.5)`), computed on the same
-USD-normalized price per m². That is not implemented yet, because the TypeScript version is
-tested and correct.
+before, so results are identical (parity test).
+
+Step 1.20 evaluated a SQL aggregate (scratch prototype, not in the code): `DISTINCT ON
+(property_id) … ORDER BY property_id, id COLLATE "C"` for one listing per property (C collation =
+JavaScript string order), district first when it has ≥ 5, USD price per m² with the same rate,
+`percentile_cont(0.5)`. On 100,000 synthetic rows it matched the TypeScript result exactly in all
+checked cases (count, min, max and the median to the last bit) and took 70 ms instead of 233 ms.
+It was **not adopted yet**: it still lacks the GEL and no-rate variants, `isConverted`, and the
+list of comparables shown on the page, and detail pages are cached anyway. It is the next
+optimization when real inventory makes candidate sets large.
 
 ## Local development (optional)
 
@@ -141,6 +194,11 @@ Safety:
 - There is no reset or drop command. Migrations only move forward.
 - The scripts use Node's built-in TypeScript support (Node 22.18+ or 23.6+).
 
-With `DATA_BACKEND=postgres`, `next build` reads the database while prerendering. Pages cache
+With `DATA_BACKEND=postgres`, `next build` reads the database while prerendering. Each build
+worker has its own pool (max. 5), so a build with many workers can open about 5 × workers
+connections (≈ 55 with 11 workers); the database must allow that many (PostgreSQL's default is
+100). The application keeps one pool per server process (also across development hot reloads).
+Listing reads are cached for "minutes" in PostgreSQL mode (status changes show up quickly) and
+"hours" in memory mode. Pages cache
 listing reads for about an hour ("use cache", like the exchange rate). If the database is down,
 pages fail with an error page; demo data is never shown in its place.

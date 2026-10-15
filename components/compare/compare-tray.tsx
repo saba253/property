@@ -4,14 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { CompareIcon } from "@/components/compare/compare-button";
-import { useCompareCatalog, useComparison } from "@/components/compare/compare-state";
+import { ensureSummaries, useComparison } from "@/components/compare/compare-state";
 import { ListingImageView, NoImagesPlaceholder } from "@/components/gallery/listing-image";
-import {
-  MAX_COMPARE,
-  MIN_COMPARE,
-  getComparisonReadiness,
-  pruneComparison,
-} from "@/lib/compare/compare-selection";
+import { MAX_COMPARE, MIN_COMPARE, getComparisonReadiness } from "@/lib/compare/compare-selection";
+import { buildComparePageHref } from "@/lib/compare/selection-urls";
 
 /**
  * Compact comparison bar fixed to the bottom of the screen while at least one listing is selected.
@@ -19,19 +15,14 @@ import {
  * never covers content, the map attribution or the map's own controls. Not shown on /compare.
  */
 export function CompareTray() {
-  const { ids, status, notice, remove, clear, dismissNotice, lookup } = useComparison();
-  const catalog = useCompareCatalog();
+  const { available, summaries, status, notice, remove, clear, dismissNotice, lookup } =
+    useComparison();
   const pathname = usePathname();
   const trayRef = useRef<HTMLDivElement>(null);
-  const known = pruneComparison(ids, lookup);
-  const visible = status !== "loading" && known.length > 0 && pathname !== "/compare";
-  const readiness = getComparisonReadiness(known, lookup);
-
-  // Listings that no longer exist are removed from the selection.
-  useEffect(() => {
-    if (status === "loading" || known.length === ids.length) return;
-    for (const id of ids) if (!known.includes(id)) remove(id);
-  }, [ids, known, remove, status]);
+  const visible = status !== "loading" && available.length > 0 && pathname !== "/compare";
+  // Readiness needs every selected listing's transaction type (loaded from the lookup endpoint).
+  const loaded = available.every((id) => summaries.byId.has(id));
+  const readiness = loaded ? getComparisonReadiness(available, lookup) : null;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -81,13 +72,21 @@ export function CompareTray() {
             <CompareIcon />
             შედარება
             <span className="font-normal text-muted">
-              {known.length} / {MAX_COMPARE}
+              {available.length} / {MAX_COMPARE}
             </span>
           </p>
 
           <ul aria-label="შედარებისთვის არჩეული" className="flex items-center gap-2">
-            {known.map((id) => {
-              const entry = catalog.get(id)!;
+            {available.map((id) => {
+              const entry = summaries.byId.get(id);
+              if (!entry) {
+                // Still loading (or the lookup failed): a neutral placeholder, never a guess.
+                return (
+                  <li key={id}>
+                    <span className="block h-8 w-11 animate-pulse rounded-lg bg-line sm:h-10 sm:w-14" />
+                  </li>
+                );
+              }
               return (
                 <li key={id} className="relative">
                   <Link href={entry.href} title={entry.title} className="block rounded-lg">
@@ -129,9 +128,9 @@ export function CompareTray() {
             >
               გასუფთავება
             </button>
-            {readiness.ready ? (
+            {readiness?.ready ? (
               <Link
-                href="/compare"
+                href={buildComparePageHref(available)}
                 className="inline-flex h-9 items-center rounded-full bg-navy px-4 text-sm font-semibold text-white hover:bg-navy-900"
               >
                 შედარება
@@ -148,11 +147,28 @@ export function CompareTray() {
             )}
           </div>
         </div>
-        {!readiness.ready && (
+        {!readiness?.ready && (
           <p id="compare-tray-hint" className="mt-0.5 text-xs text-muted">
-            {readiness.reason === "too-few"
-              ? `შესადარებლად აირჩიეთ მინიმუმ ${MIN_COMPARE} განცხადება.`
-              : "გასაყიდი და გასაქირავებელი განცხადებები ერთად ვერ შედარდება."}
+            {readiness === null ? (
+              summaries.failed ? (
+                <>
+                  არჩეული განცხადებების ჩატვირთვა ვერ მოხერხდა.{" "}
+                  <button
+                    type="button"
+                    onClick={() => void ensureSummaries(available)}
+                    className="font-semibold text-accent-700 underline-offset-4 hover:underline"
+                  >
+                    თავიდან ცდა
+                  </button>
+                </>
+              ) : (
+                "იტვირთება…"
+              )
+            ) : readiness.reason === "too-few" ? (
+              `შესადარებლად აირჩიეთ მინიმუმ ${MIN_COMPARE} განცხადება.`
+            ) : (
+              "გასაყიდი და გასაქირავებელი განცხადებები ერთად ვერ შედარდება."
+            )}
           </p>
         )}
       </div>

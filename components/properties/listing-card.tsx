@@ -85,7 +85,11 @@ export function ListingCard({
       </Link>
       {/* Below the card text, outside the link: comparing never navigates. */}
       <div className="px-3 pb-2">
-        <CompareButton listingId={listing.id} title={listing.title} />
+        <CompareButton
+          listingId={listing.id}
+          title={listing.title}
+          transactionType={listing.transactionType}
+        />
       </div>
       {/* Over the image's top-right corner: the link's padding (0.5rem) plus 0.75rem. */}
       <FavoriteButton

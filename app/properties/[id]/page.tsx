@@ -119,7 +119,12 @@ export default async function PropertyDetailPage({ params }: PageProps) {
               {PROPERTY_TYPES[property.type].label}
             </span>
             <div className="ml-auto flex flex-wrap gap-2">
-              <CompareButton listingId={listing.id} title={listing.title} variant="inline" />
+              <CompareButton
+                listingId={listing.id}
+                title={listing.title}
+                transactionType={listing.transactionType}
+                variant="inline"
+              />
               <FavoriteButton listingId={listing.id} title={listing.title} variant="inline" />
             </div>
           </div>

@@ -79,3 +79,23 @@ export function resolveFavorites(
     missing: newestFirst.filter((id) => !known.has(id)),
   };
 }
+
+/**
+ * For the favorites page, which renders only the ids it received in its URL: saved ids that are
+ * shown (newest first), saved ids the server looked up but did not find (`missing`), and whether
+ * some saved ids were not requested yet (`pending`: the URL is being updated).
+ */
+export function splitRequestedFavorites(
+  savedIds: readonly string[],
+  requestedIds: readonly string[],
+  foundIds: readonly string[],
+): { available: string[]; missing: string[]; pending: boolean } {
+  const requested = new Set(requestedIds);
+  const found = new Set(foundIds);
+  const newestFirst = [...savedIds].reverse();
+  return {
+    available: newestFirst.filter((id) => found.has(id)),
+    missing: newestFirst.filter((id) => requested.has(id) && !found.has(id)),
+    pending: savedIds.some((id) => !requested.has(id)),
+  };
+}

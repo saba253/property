@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  type ReactNode,
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { createBrowserStore } from "@/components/storage/browser-store";
+import type { ListingSummary, LookupResponse } from "@/lib/api/listing-lookup";
 import {
   COMPARE_MESSAGES,
   COMPARE_STORAGE_KEY,
@@ -19,16 +13,15 @@ import {
   serializeComparison,
 } from "@/lib/compare/compare-selection";
 import { sameStrings } from "@/lib/storage/persistent-store";
-import type { ListingImage, TransactionType } from "@/lib/properties/types";
+import type { TransactionType } from "@/lib/properties/types";
 
-/** What the tray and buttons need to know about a listing, provided by the server. */
-export type CompareCatalogEntry = {
-  id: string;
-  title: string;
-  href: string;
-  transactionType: TransactionType;
-  coverImage: ListingImage | null;
-};
+/*
+ * The comparison selection (ids in this browser's storage) and what the tray needs about the
+ * selected listings. Summaries are fetched only for the selected ids (at most four) from the
+ * read-only lookup endpoint; the full catalog is never sent to the browser. An id is dropped from
+ * the selection only when the server explicitly reports it as missing; a network or database
+ * error never removes anything.
+ */
 
 const selection = createBrowserStore<readonly string[]>({
   key: COMPARE_STORAGE_KEY,
@@ -46,45 +39,98 @@ function setNotice(next: string | null) {
   for (const listener of noticeListeners) listener();
 }
 
-const CatalogContext = createContext<ReadonlyMap<string, CompareCatalogEntry>>(new Map());
+/** Summaries known in this tab: found listings, ids reported missing, and the last failure. */
+export type SummaryState = {
+  byId: ReadonlyMap<string, ListingSummary>;
+  missing: ReadonlySet<string>;
+  failed: boolean;
+};
 
-/** Provides the catalog of comparable listings (all available listings) to the compare UI. */
-export function CompareCatalogProvider({
-  entries,
-  children,
-}: {
-  entries: readonly CompareCatalogEntry[];
-  children: ReactNode;
-}) {
-  const catalog = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
-  return <CatalogContext.Provider value={catalog}>{children}</CatalogContext.Provider>;
+const EMPTY_SUMMARIES: SummaryState = { byId: new Map(), missing: new Set(), failed: false };
+let summaries: SummaryState = EMPTY_SUMMARIES;
+const summaryListeners = new Set<() => void>();
+const inFlight = new Map<string, Promise<void>>();
+
+function setSummaries(next: SummaryState) {
+  summaries = next;
+  for (const listener of summaryListeners) listener();
 }
 
-export function useCompareCatalog(): ReadonlyMap<string, CompareCatalogEntry> {
-  return useContext(CatalogContext);
+/** Loads summaries for ids that are not known yet; resolves when they are known (or failed). */
+export function ensureSummaries(ids: readonly string[]): Promise<void> {
+  const unknown = ids.filter(
+    (id) => !summaries.byId.has(id) && !summaries.missing.has(id) && !inFlight.has(id),
+  );
+  if (unknown.length > 0) {
+    const request = fetch("/api/listings/summaries", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids: unknown }),
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        const data = (await response.json()) as LookupResponse;
+        const byId = new Map(summaries.byId);
+        for (const listing of data.listings) byId.set(listing.id, listing);
+        setSummaries({
+          byId,
+          missing: new Set([...summaries.missing, ...data.missing]),
+          failed: false,
+        });
+      })
+      .catch(() => setSummaries({ ...summaries, failed: true }))
+      .finally(() => unknown.forEach((id) => inFlight.delete(id)));
+    unknown.forEach((id) => inFlight.set(id, request));
+  }
+  return Promise.all(ids.map((id) => inFlight.get(id)).filter(Boolean)).then(() => undefined);
 }
 
-function useLookup(): TransactionLookup {
-  const catalog = useCompareCatalog();
-  return useCallback((id: string) => catalog.get(id)?.transactionType, [catalog]);
+/** The current summaries (for tests and non-React callers). */
+export function readSummaries(): SummaryState {
+  return summaries;
 }
+
+function useSummaryState(): SummaryState {
+  return useSyncExternalStore(
+    (listener) => {
+      summaryListeners.add(listener);
+      return () => summaryListeners.delete(listener);
+    },
+    () => summaries,
+    () => EMPTY_SUMMARIES,
+  );
+}
+
+const lookupFrom =
+  (state: SummaryState): TransactionLookup =>
+  (id) =>
+    state.byId.get(id)?.transactionType;
 
 /** Add/remove/clear actions only: using them does not subscribe to the selection. */
 export function useCompareActions() {
-  const lookup = useLookup();
-  const add = useCallback(
-    (id: string) => {
-      const store = selection.getStore();
-      const result = addToComparison(store.getSnapshot().value, id, lookup);
-      if (result.outcome === "added") {
-        store.update(() => result.ids);
-        setNotice(null);
-      } else {
-        setNotice(COMPARE_MESSAGES[result.outcome]);
-      }
-    },
-    [lookup],
-  );
+  const add = useCallback(async (id: string, transactionType: TransactionType) => {
+    const store = selection.getStore();
+    // The transaction types of the already selected listings decide whether this one fits.
+    await ensureSummaries(store.getSnapshot().value);
+    const current = store.getSnapshot().value;
+    const pending = current.filter(
+      (item) => !summaries.byId.has(item) && !summaries.missing.has(item),
+    );
+    if (pending.length > 0) {
+      setNotice("შედარების შემოწმება ვერ მოხერხდა. სცადეთ თავიდან.");
+      return;
+    }
+    const known = lookupFrom(summaries);
+    const result = addToComparison(current, id, (item) =>
+      item === id ? transactionType : known(item),
+    );
+    if (result.outcome === "added") {
+      store.update(() => result.ids);
+      setNotice(null);
+    } else {
+      setNotice(COMPARE_MESSAGES[result.outcome]);
+    }
+  }, []);
   const remove = useCallback((id: string) => {
     selection.getStore().update((ids) => removeFromComparison(ids, id));
     setNotice(null);
@@ -94,12 +140,17 @@ export function useCompareActions() {
     setNotice(null);
   }, []);
   const dismissNotice = useCallback(() => setNotice(null), []);
-  return { add, remove, clear, dismissNotice, lookup };
+  return { add, remove, clear, dismissNotice };
 }
 
-/** Selected ids (only after hydration), storage status, the latest notice, and actions. */
+/**
+ * Selected ids (only after hydration), storage status, the latest notice, summaries of the
+ * selected listings and actions. Ids the server reported missing are pruned from storage.
+ */
 export function useComparison() {
   const snapshot = selection.useSnapshot();
+  const state = useSummaryState();
+  const actions = useCompareActions();
   const currentNotice = useSyncExternalStore(
     (listener) => {
       noticeListeners.add(listener);
@@ -108,15 +159,39 @@ export function useComparison() {
     () => notice,
     () => null,
   );
+  const ids = snapshot.value;
+  const ready = snapshot.status !== "loading";
+
+  useEffect(() => {
+    if (ready && ids.length > 0) void ensureSummaries(ids);
+  }, [ids, ready]);
+
+  const { remove } = actions;
+  useEffect(() => {
+    if (!ready) return;
+    for (const id of ids) if (state.missing.has(id)) remove(id);
+  }, [ids, ready, state.missing, remove]);
+
+  const available = ids.filter((id) => !state.missing.has(id));
   return {
-    ids: snapshot.value,
+    ids,
+    /** Selected ids not reported missing (some may still be loading). */
+    available,
+    summaries: state,
+    lookup: lookupFrom(state),
     status: snapshot.status,
     notice: currentNotice,
-    ...useCompareActions(),
+    ...actions,
   };
 }
 
 /** Whether one listing is selected; re-renders only when that changes. */
 export function useIsCompared(listingId: string): boolean {
   return selection.useSelect((ids) => ids.includes(listingId), false);
+}
+
+/** The selected ids only (for the comparison page's URL), without summaries. */
+export function useComparedIds() {
+  const snapshot = selection.useSnapshot();
+  return { ids: snapshot.value, status: snapshot.status };
 }

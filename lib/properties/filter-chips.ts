@@ -34,14 +34,16 @@ export type FilterChip = {
 
 /**
  * Builds a canonical `/properties` URL. Unset filters are left out, and so are the display
- * currency, the view and the sort order when they are the defaults (USD, list, default order),
- * to keep shared links short.
+ * currency, the view, the sort order and the page when they are the defaults (USD, list, default
+ * order, page 1), to keep shared links short. Links that change the search criteria or the sort
+ * leave out `page`, so they start again at page 1.
  */
 export function buildListingsHref(
   filters: ListingFilters,
   display: Currency = DEFAULT_DISPLAY_CURRENCY,
   view: ListingsView = DEFAULT_LISTINGS_VIEW,
   sort: SortOption = "default",
+  page = 1,
 ): string {
   const params = new URLSearchParams();
   if (display !== DEFAULT_DISPLAY_CURRENCY) params.set("display", display);
@@ -64,6 +66,7 @@ export function buildListingsHref(
   if (filters.minFloor !== undefined) params.set("minFloor", String(filters.minFloor));
   if (filters.maxFloor !== undefined) params.set("maxFloor", String(filters.maxFloor));
   for (const amenity of filters.amenities ?? []) params.append("amenity", amenity);
+  if (page > 1) params.set("page", String(page));
 
   const query = params.toString();
   return query ? `${LISTINGS_PATH}?${query}` : LISTINGS_PATH;

@@ -8,7 +8,12 @@ import {
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getCardFacts } from "@/lib/properties/property-facts";
-import type { GeoPoint, ListingImage, LocationPrecision } from "@/lib/properties/types";
+import type {
+  GeoPoint,
+  ListingImage,
+  LocationPrecision,
+  TransactionType,
+} from "@/lib/properties/types";
 
 /**
  * Everything the map view needs about one search result, as plain serializable data. It is
@@ -19,6 +24,7 @@ export type MapListing = {
   id: string;
   href: string;
   title: string;
+  transactionType: TransactionType;
   transactionLabel: string;
   propertyTypeLabel: string;
   /** Same text as the listing card: "≈ $63,449", "$1,200 / თვე", ... */
@@ -49,6 +55,7 @@ export function toMapListing(
     id: listing.id,
     href: details.href,
     title: listing.title,
+    transactionType: listing.transactionType,
     transactionLabel: TRANSACTION_TYPES[listing.transactionType].label,
     propertyTypeLabel: PROPERTY_TYPES[property.type].label,
     priceText: formatDisplayAmount(details.price),

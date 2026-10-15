@@ -109,7 +109,11 @@ function ResultRow({
         {listing.place} · <PrecisionNote listing={listing} />
       </p>
       <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1">
-        <CompareButton listingId={listing.id} title={listing.title} />
+        <CompareButton
+          listingId={listing.id}
+          title={listing.title}
+          transactionType={listing.transactionType}
+        />
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {key && (
             <button
@@ -216,7 +220,11 @@ function MarkerPreview({
               className="absolute top-3 right-3"
             />
             <div className="px-4 pb-3">
-              <CompareButton listingId={listing.id} title={listing.title} />
+              <CompareButton
+                listingId={listing.id}
+                title={listing.title}
+                transactionType={listing.transactionType}
+              />
             </div>
           </li>
         ))}

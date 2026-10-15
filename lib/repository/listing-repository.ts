@@ -19,6 +19,27 @@ import type { Currency, ListingImage, TransactionType } from "@/lib/properties/t
 /** Statuses that may be shown by id. Future moderation states (draft, pending) are excluded. */
 export const PUBLIC_LISTING_STATUSES = ["active", "inactive"] as const;
 
+/** Most ids one batch lookup may ask for (favorites hold at most 100). */
+export const MAX_BATCH_IDS = 100;
+
+/**
+ * Distinct ids in first-seen order. Throws RangeError for more than MAX_BATCH_IDS distinct ids,
+ * so a caller cannot turn a batch lookup into an unbounded query.
+ */
+export function normalizeBatchIds(ids: readonly string[]): string[] {
+  const distinct = [...new Set(ids)];
+  if (distinct.length > MAX_BATCH_IDS) {
+    throw new RangeError(`At most ${MAX_BATCH_IDS} ids per lookup.`);
+  }
+  return distinct;
+}
+
+/**
+ * Counts stop at this number: above it the total is reported as "more than COUNT_LIMIT" instead
+ * of joining every match just to show an exact figure (measured in db/README.md).
+ */
+export const COUNT_LIMIT = 1000;
+
 /** Largest page a search may request; protects against unbounded queries. */
 export const MAX_PAGE_SIZE = 100;
 /** Highest offset accepted; deep pages need cursor pagination (not implemented yet). */
@@ -46,8 +67,10 @@ export type ListingSearchQuery = {
 };
 
 export type ListingCount = {
-  /** Listings matching every filter. */
+  /** Listings matching every filter, counted up to COUNT_LIMIT. */
   total: number;
+  /** False when there are more than COUNT_LIMIT matches (total is then COUNT_LIMIT). */
+  totalIsExact: boolean;
   /** Listings that met every other filter but could not be compared with the budget (no rate). */
   notComparableCount: number;
 };
@@ -56,6 +79,8 @@ export type ListingSearchResult = ListingCount & {
   /** One page, in a deterministic order (sort value, then insertion order). */
   items: ListingWithProperty[];
   page: PageRequest;
+  /** Whether at least one more result exists after this page. */
+  hasNextPage: boolean;
   /** The sort actually applied (the default order when a price sort was not possible). */
   sortApplied: SortOption;
   sortNotice: "rate-unavailable" | null;
@@ -77,6 +102,11 @@ export interface ListingRepository {
   readonly backend: "memory" | "postgres";
   /** A public listing with its property, or null when it does not exist or is not public. */
   getListingById(id: string): Promise<ListingWithProperty | null>;
+  /**
+   * Public listings for the given ids, in the requested order, each once. Unknown and non-public
+   * ids are left out (callers report them). One query, at most MAX_BATCH_IDS ids.
+   */
+  getListingsByIds(ids: readonly string[]): Promise<ListingWithProperty[]>;
   /** Ids of all public listings (for static generation of detail pages). */
   getListingIds(): Promise<string[]>;
   /**

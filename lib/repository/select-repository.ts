@@ -31,10 +31,17 @@ export async function createRepository(
   });
 }
 
-let shared: Promise<ListingRepository> | null = null;
+// Kept on globalThis so development hot reloads reuse the one pool instead of opening new ones.
+const holder = globalThis as typeof globalThis & {
+  __propertyListingRepository?: Promise<ListingRepository>;
+};
 
-/** The application's repository, created once per server process from the environment. */
+/**
+ * The application's repository, created once per server process from the environment: one
+ * `pg` pool (max. 5 connections, bounded timeouts) for all requests.
+ */
 export function getListingRepository(): Promise<ListingRepository> {
-  shared ??= (async () => createRepository(resolveDataBackend(process.env)))();
-  return shared;
+  holder.__propertyListingRepository ??= (async () =>
+    createRepository(resolveDataBackend(process.env)))();
+  return holder.__propertyListingRepository;
 }

@@ -10,6 +10,8 @@ import {
   type ListingCover,
   type ListingRepository,
   PUBLIC_LISTING_STATUSES,
+  COUNT_LIMIT,
+  normalizeBatchIds,
   normalizePage,
 } from "@/lib/repository/listing-repository";
 
@@ -51,6 +53,12 @@ export function createMemoryRepository(dataset: MemoryDataset = DEMO_DATASET): L
     async getListingById(id) {
       return publicItems.find((item) => item.listing.id === id) ?? null;
     },
+    async getListingsByIds(ids) {
+      const byId = new Map(publicItems.map((item) => [item.listing.id, item]));
+      return normalizeBatchIds(ids)
+        .map((id) => byId.get(id))
+        .filter((item): item is ListingWithProperty => item !== undefined);
+    },
     async getListingIds() {
       return publicItems.map((item) => item.listing.id);
     },
@@ -74,7 +82,11 @@ export function createMemoryRepository(dataset: MemoryDataset = DEMO_DATASET): L
         display,
         rateState,
       );
-      return { total: matches.length, notComparableCount };
+      return {
+        total: Math.min(matches.length, COUNT_LIMIT),
+        totalIsExact: matches.length <= COUNT_LIMIT,
+        notComparableCount,
+      };
     },
     async searchListings({ filters, display, rateState, sort, page }) {
       const { matches, notComparableCount } = filterListings(
@@ -87,9 +99,11 @@ export function createMemoryRepository(dataset: MemoryDataset = DEMO_DATASET): L
       const bounds = normalizePage(page);
       return {
         items: sorted.items.slice(bounds.offset, bounds.offset + bounds.limit),
-        total: matches.length,
+        total: Math.min(matches.length, COUNT_LIMIT),
+        totalIsExact: matches.length <= COUNT_LIMIT,
         notComparableCount,
         page: bounds,
+        hasNextPage: bounds.offset + bounds.limit < matches.length,
         sortApplied: sorted.applied,
         sortNotice: sorted.notice,
       };
@@ -99,7 +113,7 @@ export function createMemoryRepository(dataset: MemoryDataset = DEMO_DATASET): L
     },
     async getListingCovers(listingIds) {
       const covers: Record<string, ListingCover> = {};
-      for (const id of listingIds) {
+      for (const id of normalizeBatchIds(listingIds)) {
         const images = imagesOf(id);
         covers[id] = { coverImage: selectCoverImage(images), imageCount: images.length };
       }

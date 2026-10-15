@@ -1,6 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Markup tests run without Next.js' app router; the URL sync only needs a router to exist.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => null,
+}));
 import { FAVORITE_LABELS, FavoriteButton } from "@/components/favorites/favorite-button";
 import { FavoritesGrid } from "@/components/favorites/favorites-grid";
 import { ListingCard } from "@/components/properties/listing-card";
@@ -64,7 +70,9 @@ describe("ListingCard with a favorite button", () => {
 
 describe("FavoritesGrid", () => {
   it("renders a loading state on the server instead of guessing saved items", () => {
-    const html = renderToStaticMarkup(createElement(FavoritesGrid, { cards: [] }));
+    const html = renderToStaticMarkup(
+      createElement(FavoritesGrid, { cards: [], requestedIds: [] }),
+    );
     expect(html).toContain("რჩეულები იტვირთება");
     expect(html).not.toContain("<li");
   });

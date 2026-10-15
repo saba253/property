@@ -9,6 +9,7 @@ import { DemoDisclosure } from "@/components/properties/demo-label";
 import { ListingCard } from "@/components/properties/listing-card";
 import { TransactionTabs } from "@/components/properties/transaction-tabs";
 import { SearchFeedback } from "@/components/search/search-feedback";
+import { Pagination } from "@/components/properties/pagination";
 import { SortMenu } from "@/components/properties/sort-menu";
 import {
   ListingFiltersForm,
@@ -43,6 +44,7 @@ import {
   switchTransaction,
 } from "@/lib/properties/listing-filters";
 import { SORT_OPTIONS, type SortOption, parseSort } from "@/lib/properties/listing-sort";
+import { PAGE_SIZE, lastPageOf, pageRequest, parsePage } from "@/lib/properties/listing-page";
 import { type ListingsView, parseListingsView } from "@/lib/properties/listings-view";
 import type { Currency, TransactionType } from "@/lib/properties/types";
 
@@ -158,9 +160,22 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   // Sorting is a view setting like the display currency: every link below keeps it.
   const { sort, invalid: invalidSort } = parseSort(rawQuery);
   const { filters, display } = parsed;
+  // Page number: a view position like the list/map view. Links that change the criteria or the
+  // sort go back to page 1; the currency and view toggles keep the page.
+  const { page: requestedPage, invalid: invalidPage } = parsePage(rawQuery);
   // Filtering, sorting and paging happen in the repository (in memory or in PostgreSQL) with the
-  // same rate snapshot; list and map both show this order. One page of up to MAX_PAGE_SIZE.
-  const result = await searchListings({ filters, display, rateState, sort });
+  // same rate snapshot; list and map both show this page in this order.
+  let page = requestedPage;
+  let result = await searchListings({ filters, display, rateState, sort, page: pageRequest(page) });
+  let pageOutOfRange = false;
+  if (result.items.length === 0 && page > 1) {
+    // A page past the end (for example an old link after results changed): show the last page.
+    pageOutOfRange = true;
+    page = lastPageOf(result.total, result.totalIsExact) ?? 1;
+    result = await searchListings({ filters, display, rateState, sort, page: pageRequest(page) });
+  }
+  const lastPage = lastPageOf(result.total, result.totalIsExact);
+  const firstShown = (page - 1) * PAGE_SIZE + 1;
   const { notComparableCount } = result;
   const matches = result.items;
   const covers = await getListingCovers(matches.map((item) => item.listing.id));
@@ -173,14 +188,15 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
     otherCurrency,
     view,
     sort,
+    page,
   );
   const toggleHrefs: Record<Currency, string> =
     display === "USD"
-      ? { USD: buildListingsHref(filters, "USD", view, sort), GEL: otherHref }
-      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL", view, sort) };
+      ? { USD: buildListingsHref(filters, "USD", view, sort, page), GEL: otherHref }
+      : { USD: otherHref, GEL: buildListingsHref(filters, "GEL", view, sort, page) };
   const viewHrefs: Record<ListingsView, string> = {
-    list: buildListingsHref(filters, display, "list", sort),
-    map: buildListingsHref(filters, display, "map", sort),
+    list: buildListingsHref(filters, display, "list", sort, page),
+    map: buildListingsHref(filters, display, "map", sort, page),
   };
   const sortHrefs = Object.fromEntries(
     SORT_OPTIONS.map((option) => [
@@ -235,7 +251,11 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
 
           {search && <SearchFeedback query={searchText} search={search} />}
 
-          {(parsed.issues.length > 0 || invalidView || invalidSort) && (
+          {(parsed.issues.length > 0 ||
+            invalidView ||
+            invalidSort ||
+            invalidPage ||
+            pageOutOfRange) && (
             <ul className="mt-4 space-y-1 rounded-2xl border border-accent-100 bg-accent-50 p-4 text-sm leading-6 text-navy">
               {parsed.issues.map((issue, index) => (
                 <li key={index}>{issueMessage(issue)}</li>
@@ -243,6 +263,14 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
               {invalidView && <li>მითითებული ხედი არასწორია, ამიტომ შედეგები ნაჩვენებია სიით.</li>}
               {invalidSort && (
                 <li>მითითებული დალაგება არასწორია, ამიტომ ნაჩვენებია ნაგულისხმევი რიგი.</li>
+              )}
+              {invalidPage && (
+                <li>მითითებული გვერდი არასწორია, ამიტომ ნაჩვენებია პირველი გვერდი.</li>
+              )}
+              {pageOutOfRange && (
+                <li>
+                  გვერდი {requestedPage} ამ შედეგებში არ არსებობს, ამიტომ ნაჩვენებია გვერდი {page}.
+                </li>
               )}
             </ul>
           )}
@@ -279,13 +307,17 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p role="status" className="text-base font-semibold text-ink">
-            ნაპოვნია {result.total} განცხადება
+            ნაპოვნია{" "}
+            {result.totalIsExact ? result.total : `${result.total.toLocaleString("en-US")}+`}{" "}
+            განცხადება
             {filtersActive ? (
               <span className="font-normal text-muted"> (სულ {transactionTotal})</span>
             ) : null}
-            {result.total > matches.length ? (
-              // Pagination controls come with larger inventories; never hide that this is a part.
-              <span className="font-normal text-muted"> · ნაჩვენებია პირველი {matches.length}</span>
+            {matches.length > 0 && (page > 1 || result.hasNextPage) ? (
+              <span className="font-normal text-muted">
+                {" "}
+                · ნაჩვენებია {firstShown}–{firstShown + matches.length - 1}
+              </span>
             ) : null}
             {resultsIncomplete ? (
               <span className="font-normal text-amber-900"> · შედეგები არასრულია</span>
@@ -330,7 +362,13 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
 
         {matches.length > 0 && view === "map" ? (
           <div className="mt-5">
-            {/* Same filtered results, prices and links as the list; the map never filters. */}
+            {(page > 1 || result.hasNextPage) && (
+              // Honest scope: the map shows this page only, never "all matches".
+              <p className="mb-2 text-sm text-muted">
+                რუკაზე ნაჩვენებია მხოლოდ ამ გვერდის {matches.length} განცხადება.
+              </p>
+            )}
+            {/* Same results, prices and links as the list for this page; the map never filters. */}
             <MapResults listings={matches.map((item) => toMapListing(item, cardData(item)))} />
           </div>
         ) : matches.length > 0 ? (
@@ -370,6 +408,13 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
             </Link>
           </div>
         )}
+
+        <Pagination
+          page={page}
+          lastPage={lastPage}
+          hasNextPage={result.hasNextPage}
+          hrefFor={(target) => buildListingsHref(filters, display, view, sort, target)}
+        />
 
         <p className="mt-12 max-w-3xl border-t border-line pt-5 text-xs leading-5 text-muted">
           ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა (ქირისთვის — თვიური

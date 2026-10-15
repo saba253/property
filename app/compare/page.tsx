@@ -8,7 +8,10 @@ import { pageContainer } from "@/components/ui/styles";
 import { buildComparisonColumns } from "@/lib/compare/comparison";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { buildListingDetailHref } from "@/lib/properties/filter-chips";
-import { getActiveListings, getListingCovers } from "@/lib/data/listings";
+import { parseIdsParam } from "@/lib/api/listing-lookup";
+import { MAX_COMPARE } from "@/lib/compare/compare-selection";
+import { buildComparePageHref } from "@/lib/compare/selection-urls";
+import { getListingCoversUncached, getListingsByIds } from "@/lib/data/listings";
 import { parseDisplayCurrency } from "@/lib/properties/listing-filters";
 
 export const metadata: Metadata = {
@@ -18,16 +21,19 @@ export const metadata: Metadata = {
 };
 
 /**
- * Columns for every available listing are prepared on the server from one exchange-rate snapshot;
- * the browser shows the ones selected in this browser. The selection never leaves the browser.
+ * Columns only for the selected listings: the browser puts the selected ids in the URL (`?ids=`,
+ * kept in sync by SelectionUrlSync) and the server prepares their columns from one exchange-rate
+ * snapshot in one batch lookup. The selection itself is stored only in this browser.
  */
 async function Comparison({ searchParams }: Pick<PageProps<"/compare">, "searchParams">) {
-  const { display } = parseDisplayCurrency(await searchParams);
+  const query = await searchParams;
+  const { display } = parseDisplayCurrency(query);
+  const requestedIds = parseIdsParam(query.ids, MAX_COMPARE);
   const rateState = await getExchangeRateState();
-  // The selection lives in the browser, so columns are prepared for every available listing
-  // (a small catalog today; a large inventory needs a request for the selected ids only).
-  const listings = await getActiveListings();
-  const covers = await getListingCovers(listings.map((item) => item.listing.id));
+  const listings = (await getListingsByIds(requestedIds)).filter(
+    (item) => item.listing.status === "active",
+  );
+  const covers = await getListingCoversUncached(listings.map((item) => item.listing.id));
   const columns = buildComparisonColumns(
     listings,
     (item) => ({
@@ -45,14 +51,17 @@ async function Comparison({ searchParams }: Pick<PageProps<"/compare">, "searchP
         <div className="flex flex-wrap items-start gap-3">
           <CurrencyToggle
             current={display}
-            hrefFor={{ USD: "/compare", GEL: "/compare?display=GEL" }}
+            hrefFor={{
+              USD: buildComparePageHref(requestedIds, "USD"),
+              GEL: buildComparePageHref(requestedIds, "GEL"),
+            }}
           />
           <div className="lg:min-w-[24rem]">
             <RateNotice rateState={rateState} />
           </div>
         </div>
       </div>
-      <ComparisonView columns={columns} />
+      <ComparisonView columns={columns} requestedIds={requestedIds} />
     </>
   );
 }
