@@ -322,6 +322,7 @@ export function ListingDraftWizard({
             photos={storesPhotos ? storedAsDraftPhotos(storedPhotos) : state.draft.photos}
             rateState={rateState}
             storedPhotos={storesPhotos}
+            status={initialStatus}
           />
         ) : (
           <p className="text-muted">დრაფტში შეცდომებია. დაბრუნდით წინა ნაბიჯებზე.</p>

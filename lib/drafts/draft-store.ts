@@ -243,7 +243,7 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
               WHERE i.listing_id = l.id AND i.source_kind = 'upload' AND i.is_cover) AS cover_photo_id,
             l.status,
             (SELECT e.reason FROM listing_status_events e
-              WHERE e.listing_id = l.id AND e.to_status = l.status
+              WHERE e.listing_id = l.id AND e.kind = 'status' AND e.to_status = l.status
               ORDER BY e.id DESC LIMIT 1) AS reason
      ${LISTING_FROM}
      WHERE ${OWNED} AND l.status <> 'archived'

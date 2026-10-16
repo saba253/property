@@ -23,6 +23,7 @@ import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 import { getStructuralFacts } from "@/lib/properties/property-facts";
 import type { Currency } from "@/lib/properties/types";
+import { PREVIEW_LABEL, type UserListingStatus } from "@/lib/review/statuses";
 
 /** Corner label on draft photos in the gallery and photo viewer. */
 export const LOCAL_PREVIEW_LABEL = "ლოკალური გადახედვა · არ არის ატვირთული";
@@ -35,6 +36,8 @@ type DraftPreviewProps = {
   rateState: ExchangeRateState;
   /** True when the photos are stored with the saved draft (not local previews). */
   storedPhotos?: boolean;
+  /** Review status of a stored listing; the badge names it (a local draft is a "draft"). */
+  status?: UserListingStatus;
 };
 
 /**
@@ -42,7 +45,13 @@ type DraftPreviewProps = {
  * the same components (gallery, facts, amenities, price per m²). It is clearly labelled as a
  * draft and offers no way to publish.
  */
-export function DraftPreview({ item, photos, rateState, storedPhotos = false }: DraftPreviewProps) {
+export function DraftPreview({
+  item,
+  photos,
+  rateState,
+  storedPhotos = false,
+  status = "draft",
+}: DraftPreviewProps) {
   const [display, setDisplay] = useState<Currency>(DEFAULT_DISPLAY_CURRENCY);
   const { listing, property } = item;
   const price = getListingDisplayPrice(item, display, rateState);
@@ -64,7 +73,7 @@ export function DraftPreview({ item, photos, rateState, storedPhotos = false }: 
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-300">
-              დრაფტი · არ არის გამოქვეყნებული
+              {PREVIEW_LABEL[status]}
             </span>
             <span className="inline-flex items-center rounded-full bg-navy px-2.5 py-1 text-xs font-semibold text-white">
               {TRANSACTION_TYPES[listing.transactionType].label}

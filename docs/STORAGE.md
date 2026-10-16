@@ -108,18 +108,58 @@ photos become public with publishing. No paid service is used today.
   removes embedded payloads, but a scanner is still advisable before public uploads).
 - No drag-to-reorder; reordering uses left/right buttons (keyboard and touch friendly).
 - Signed-out visitors' local previews are not carried over after signing in.
-- **Development reload loop (cause not confirmed).** Once, after restarting `npm run dev`,
-  every page reloaded several times per second (each browser console message written to
-  `.next/dev/logs/next-development.log` was followed by "Compiled" and a full reload). It
-  started on all pages, including ones without photo code, and stopped when the old tab was
-  closed but returned in a new tab. It disappeared after deleting the generated `.next/dev`
-  folder; at the same time a `/* turbopackIgnore: true */` hint was added to `process.cwd()` in
-  `lib/photos/instance.ts`. Which of the two fixed it is unknown, and the loop could not be
-  reproduced afterwards (see PROJECT_CONTEXT.md). It happened once more in Step 1.24 after a long
-  development session; deleting `.next/dev` stopped it again. Observed mechanism: every request was followed by a new
-  compilation, the browser's HMR version no longer matched and the server sent `RELOAD_PAGE`.
-  The trigger is still unknown and this is only a workaround, not a fix. If it happens again: stop `npm run dev`,
-  delete `.next/dev` (generated; no source or data) and start it again.
+- **Development reload loop (root cause NOT confirmed).** Twice (Step 1.23 after a restart,
+  Step 1.24 after a long session with many edits) every page of `npm run dev` reloaded several
+  times per second. Deleting the generated `.next/dev` folder stopped it both times. That is a
+  **workaround, not a fix**: the trigger is unknown. Details of the Step 1.25 investigation are in
+  "Investigating the dev reload loop" below.
+
+## Investigating the dev reload loop (Step 1.25)
+
+**Mechanism (read in `node_modules/next/dist/server/dev/hot-reloader-turbopack.js`, Next.js
+16.4).** On connect the server sends the browser its `hmrVersion`; the browser answers with
+`turbopack-subscribe` carrying that version. Any compilation event in between increments the
+server's `clientHmrVersion`; the versions then differ and the server answers `RELOAD_PAGE` with
+"HMR hash mismatch". A loop therefore needs something that causes a compilation on (almost)
+every page load. In the first occurrence each browser console message written to
+`.next/dev/logs/next-development.log` was followed by "Compiled", so the watcher reacted to
+files that it normally ignores, or to files changed by every page load.
+
+**Tried in Step 1.25, none reproduced the loop on a healthy `.next/dev`:**
+
+- appending a line to `.next/dev/logs/next-development.log` (no compilation);
+- touching `next-env.d.ts` (no compilation);
+- creating and deleting 30 temporary files inside `app/` like in-place editors do (`sed…`,
+  `*.tmp.*`), then loading pages (no compilation, no `RELOAD_PAGE`);
+- a long session with ~30 source edits, new routes, a migration and an open tab (normal
+  "Compiled" per edit, no loop);
+- a file-change log of a whole browser session (`.data/uploads`, `.data/mail`,
+  `.next/dev/logs`, `.next/dev/cache` change constantly; none triggered a compilation).
+
+The application itself has no runtime file access that the bundler would trace into the project
+folder (only `lib/photos/instance.ts`, marked `turbopackIgnore`, and the migration loader, which
+is used by scripts only). Not done: a Webpack comparison (without a reproducible trigger it would
+prove nothing) and Turbopack tracing (to be enabled when the loop is live). No dependency was
+upgraded.
+
+**Remaining hypotheses (unconfirmed):** a stale entry in the persistent Turbopack cache
+(`.next/dev/cache`, ~450 MB after a day) that invalidates on every request; a file watched
+through an earlier `process.cwd()` trace kept in that cache; Windows file events (antivirus or
+indexing) touching watched files.
+
+**If it happens again — keep the evidence first:**
+
+1. Leave the looping tab open. In a second terminal run
+   `node tools/local-dev/watch-probe.mjs --snapshot`. It copies `.next/dev/logs` and a listing of
+   `.next/dev` to `.data/diagnostics/<time>/` and then logs every file change (git-ignored; it
+   never changes project files). Let it run for ~30 seconds of looping, then Ctrl+C.
+2. Optionally restart once with `NEXT_TURBOPACK_TRACING=1 npm run dev` (trace in `.next/dev`)
+   to see which file invalidates.
+3. Only then stop `npm run dev`, rename (not delete) `.next/dev` to keep it for analysis, and
+   start again.
+
+A fix counts as confirmed only when the loop can be triggered on purpose and no longer appears
+with the fix under the same steps.
 
 ## Commands (Windows, from the project folder)
 

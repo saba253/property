@@ -49,6 +49,39 @@ export function canTransition(
 export const REASON_REQUIRED: readonly UserListingStatus[] = ["changes_requested", "rejected"];
 export const MAX_REASON_LENGTH = 1000;
 
+/** Badge on the listing preview: the status and that the listing is not public. */
+export const PREVIEW_LABEL: Record<UserListingStatus, string> = {
+  draft: "დრაფტი · არ არის გამოქვეყნებული",
+  submitted: "განხილვაზე · არ არის გამოქვეყნებული",
+  changes_requested: "საჭიროა ცვლილება · არ არის გამოქვეყნებული",
+  approved: "დამტკიცებულია · ჯერ არ გამოქვეყნებულა",
+  rejected: "უარყოფილია · არ ქვეყნდება",
+  archived: "წაშლილია · არსად ჩანს",
+};
+
+/**
+ * How long a moderator's claim on a submitted listing lasts. The database sets the expiry
+ * (migration 0006: interval '60 minutes'); a test keeps both values equal.
+ */
+export const CLAIM_MINUTES = 60;
+
+/** Editable starting points for a moderator's reason (the text can be changed before sending). */
+export const REASON_TEMPLATES: readonly { label: string; text: string }[] = [
+  { label: "ბნელი ფოტოები", text: "ფოტოები ბნელი ან ბუნდოვანია. ატვირთეთ უფრო ნათელი ფოტოები." },
+  { label: "ფოტო არ შეესაბამება", text: "ზოგიერთი ფოტო არ შეესაბამება აღწერილ ქონებას." },
+  { label: "ფასი", text: "ფასი ან ვალუტა სავარაუდოდ შეცდომითაა მითითებული. გადაამოწმეთ." },
+  {
+    label: "ფართი/ოთახები",
+    text: "ფართი ან ოთახების რაოდენობა ერთმანეთს არ ემთხვევა. გადაამოწმეთ.",
+  },
+  { label: "მდებარეობა", text: "მდებარეობა (ქალაქი ან უბანი) არასრულია ან არასწორია." },
+  { label: "სათაური", text: "სათაური არ აღწერს ქონებას ან შეიცავს ზედმეტ ინფორმაციას." },
+  {
+    label: "წესების დარღვევა",
+    text: "განცხადება არღვევს პლატფორმის წესებს და ვერ დამტკიცდება.",
+  },
+];
+
 export function isUserListingStatus(value: unknown): value is UserListingStatus {
   return (USER_LISTING_STATUSES as readonly unknown[]).includes(value);
 }

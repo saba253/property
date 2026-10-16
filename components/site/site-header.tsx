@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HeaderAccount } from "@/components/auth/header-account";
 import { HeaderCompareLink } from "@/components/compare/header-compare-link";
 import { HeaderFavoritesLink } from "@/components/favorites/header-favorites-link";
+import { HeaderNotifications } from "@/components/notifications/header-notifications";
 import { HeaderMenu, type HeaderMenuItem } from "@/components/site/header-menu";
 import { Logo } from "@/components/site/logo";
 import { pageContainer } from "@/components/ui/styles";
@@ -16,8 +17,9 @@ const MENU_ITEMS: readonly HeaderMenuItem[] = [
 
 /**
  * One line at every width: search link, favorites and comparison (icons with counts; text from
- * `xl`), "add listing" from `lg`, and a compact menu with every section; the account entry
- * ("შესვლა", or "ჩემი ანგარიში" and "გამოსვლა") is the first item of that menu.
+ * `xl`), "add listing" from `lg`, a notification bell for signed-in users, and a compact menu
+ * with every section; the account entry ("შესვლა", or "ჩემი ანგარიში" and "გამოსვლა") is the
+ * first item of that menu.
  */
 export function SiteHeader() {
   return (
@@ -36,6 +38,7 @@ export function SiteHeader() {
           </Link>
           <HeaderFavoritesLink />
           <HeaderCompareLink />
+          <HeaderNotifications />
           <Link
             href="/properties/new"
             className="hidden items-center gap-1.5 rounded-full border border-line-strong px-3 py-2 text-sm font-medium whitespace-nowrap text-navy transition-colors hover:border-navy lg:inline-flex"

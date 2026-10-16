@@ -25,6 +25,7 @@ describe("migration files", () => {
       "0003_user_listing_drafts",
       "0004_draft_photo_uploads",
       "0005_listing_moderation",
+      "0006_review_assignments_notifications",
     ]);
     expect(migrationChecksum("a\r\nb")).toBe(migrationChecksum("a\nb"));
     expect(() => parseMigrations([{ file: "1_bad.sql", sql: "" }])).toThrow("Unexpected");
@@ -55,7 +56,14 @@ describe("running migrations", () => {
   it("applies pending migrations once and records them", async () => {
     db = await createTestDatabase({ migrate: false });
     const migrations = loadMigrations();
-    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002", "0003", "0004", "0005"]);
+    expect(await runMigrations(db, migrations)).toEqual([
+      "0001",
+      "0002",
+      "0003",
+      "0004",
+      "0005",
+      "0006",
+    ]);
     expect(await runMigrations(db, migrations)).toEqual([]);
     const status = await getMigrationStatus(db, migrations);
     expect(status.pending).toEqual([]);
@@ -65,6 +73,7 @@ describe("running migrations", () => {
       { version: "0003", name: "user_listing_drafts" },
       { version: "0004", name: "draft_photo_uploads" },
       { version: "0005", name: "listing_moderation" },
+      { version: "0006", name: "review_assignments_notifications" },
     ]);
     const { rows } = await db.query<{ count: number }>("SELECT count(*)::int AS count FROM cities");
     expect(rows[0].count).toBe(2);

@@ -173,13 +173,22 @@ describe("data access boundaries", () => {
   it("keeps moderation on the server and its pages private", () => {
     for (const file of all.filter(isClient)) {
       expect(source(file), file).not.toMatch(
-        /from "@\/lib\/review\/(review-store|review-service)"/,
+        /from "@\/lib\/review\/(review-store|review-service|fingerprints)"/,
+      );
+      expect(source(file), file).not.toMatch(
+        /from "@\/lib\/notifications\/(notification-store|notification-service)"/,
       );
     }
-    expect(source(join(root, "app", "moderation", "actions.ts"))).toMatch(/^"use server";/);
+    for (const actions of [
+      join(root, "app", "moderation", "actions.ts"),
+      join(root, "app", "account", "notifications", "actions.ts"),
+    ]) {
+      expect(source(actions), actions).toMatch(/^"use server";/);
+    }
     for (const page of [
       join(root, "app", "moderation", "page.tsx"),
       join(root, "app", "moderation", "review", "page.tsx"),
+      join(root, "app", "moderation", "history", "page.tsx"),
       join(root, "app", "account", "listings", "view", "page.tsx"),
     ]) {
       expect(code(page), page).toContain("connection()");
@@ -188,10 +197,16 @@ describe("data access boundaries", () => {
       // Unauthorized visitors get the ordinary 404 (no hint that the page exists).
       expect(code(page), page).toContain("notFound()");
     }
-    // Actions take no actor, owner or role from the browser.
+    // The notifications page is private too (signed-out visitors go to the login page).
+    const notifications = join(root, "app", "account", "notifications", "page.tsx");
+    expect(code(notifications)).toContain("connection()");
+    expect(code(notifications)).not.toContain('"use cache"');
+    expect(source(notifications)).toMatch(/robots: \{ index: false, follow: false \}/);
+    // Actions take no actor, owner, role or recipient from the browser.
     for (const file of [
       join(root, "app", "moderation", "actions.ts"),
       join(root, "app", "account", "listings", "actions.ts"),
+      join(root, "app", "account", "notifications", "actions.ts"),
     ]) {
       expect(code(file), file).not.toMatch(/\b(userId|ownerId|moderatorId|role|actor)\s*[:,)]/);
     }

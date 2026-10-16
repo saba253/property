@@ -68,6 +68,9 @@ async function Account() {
           <Link href="/properties/new" className="text-accent-700 hover:underline">
             ახალი დრაფტი
           </Link>
+          <Link href="/account/notifications" className="text-accent-700 hover:underline">
+            შეტყობინებები
+          </Link>
         </div>
       </section>
 
@@ -79,12 +82,14 @@ async function Account() {
           <p className="mt-2 text-sm leading-6 text-muted">
             თქვენ მოდერატორი ხართ. განიხილეთ გაგზავნილი განცხადებები.
           </p>
-          <Link
-            href="/moderation"
-            className="mt-3 inline-block text-sm font-semibold text-accent-700 hover:underline"
-          >
-            განხილვის რიგი →
-          </Link>
+          <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
+            <Link href="/moderation" className="text-accent-700 hover:underline">
+              განხილვის რიგი →
+            </Link>
+            <Link href="/moderation/history" className="text-accent-700 hover:underline">
+              ისტორია
+            </Link>
+          </div>
         </section>
       )}
 

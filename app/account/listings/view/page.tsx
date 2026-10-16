@@ -68,6 +68,7 @@ async function OwnerListing({
           photos={storedAsDraftPhotos(view.photos)}
           rateState={rateState}
           storedPhotos
+          status={view.status}
         />
       </div>
       <StatusHistory events={view.history} viewer="owner" />

@@ -15,6 +15,7 @@ import {
 import { isCompleteListing } from "@/lib/review/review-store";
 import {
   type ReviewDeps,
+  claimForReview,
   currentUserIsModerator,
   moderate,
   moderationQueue,
@@ -69,6 +70,17 @@ async function draft(owner = "owner-a", withPhoto = true) {
   return id;
 }
 
+/** Claims the listing for `moderator` and decides. */
+async function decideAs(
+  moderator: string,
+  id: string,
+  kind: "approve" | "request-changes" | "reject",
+  reason: string | null,
+) {
+  expect(await claimForReview(as(moderator), id)).toEqual({ ok: true });
+  return moderate(as(moderator), id, kind, reason);
+}
+
 async function statusOf(id: string) {
   const { rows } = await db.query<{ status: string }>("SELECT status FROM listings WHERE id = $1", [
     id,
@@ -84,9 +96,9 @@ async function inStatus(status: string, owner = "owner-a") {
     return id;
   }
   expect(await submitForReview(as(owner), id)).toEqual({ ok: true });
-  if (status === "approved") await moderate(as("mod-1"), id, "approve", null);
-  if (status === "changes_requested") await moderate(as("mod-1"), id, "request-changes", "fix");
-  if (status === "rejected") await moderate(as("mod-1"), id, "reject", "no");
+  if (status === "approved") await decideAs("mod-1", id, "approve", null);
+  if (status === "changes_requested") await decideAs("mod-1", id, "request-changes", "fix");
+  if (status === "rejected") await decideAs("mod-1", id, "reject", "no");
   expect(await statusOf(id)).toBe(status);
   return id;
 }
@@ -110,6 +122,8 @@ describe("status transitions (database and application agree)", () => {
     const owner = "owner-a";
     for (const from of USER_LISTING_STATUSES) {
       const id = await inStatus(from, owner);
+      // Moderator decisions need the moderator's claim (migration 0006).
+      if (from === "submitted") expect(await claimForReview(as("mod-1"), id)).toEqual({ ok: true });
       for (const to of USER_LISTING_STATUSES) {
         if (to === from) continue;
         for (const role of ["owner", "moderator"] as const) {
@@ -292,7 +306,7 @@ describe("moderation", () => {
       ok: false,
       reason: "own-listing",
     });
-    expect(await moderate(as("mod-1"), own, "approve", null)).toEqual({ ok: true });
+    expect(await decideAs("mod-1", own, "approve", null)).toMatchObject({ ok: true });
   });
 
   it("requires a reason for change requests and rejections", async () => {
@@ -316,8 +330,9 @@ describe("moderation", () => {
     await db.exec("ROLLBACK");
   });
 
-  it("accepts only one of two simultaneous decisions", async () => {
+  it("accepts only one of two simultaneous decisions by the claim holder", async () => {
     const id = await inStatus("submitted");
+    expect(await claimForReview(as("mod-1"), id)).toEqual({ ok: true });
     let chain: Promise<unknown> = Promise.resolve();
     const serial = (userId: string): ReviewDeps => ({
       ...as(userId),
@@ -329,12 +344,18 @@ describe("moderation", () => {
     });
     const results = await Promise.all([
       moderate(serial("mod-1"), id, "approve", null),
-      moderate(serial("mod-2"), id, "reject", "duplicate"),
+      moderate(serial("mod-1"), id, "reject", "duplicate"),
+      moderate(serial("mod-2"), id, "reject", "not mine"),
     ]);
     expect(results.filter((r) => r.ok).length).toBe(1);
-    expect(results.filter((r) => !r.ok).map((r) => !r.ok && r.reason)).toEqual(["conflict"]);
+    expect(
+      results
+        .filter((r) => !r.ok)
+        .map((r) => !r.ok && r.reason)
+        .sort(),
+    ).toEqual(["conflict", "conflict"]);
     const { rows } = await db.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM listing_status_events WHERE listing_id = $1 AND actor_role = 'moderator'",
+      "SELECT count(*)::int AS n FROM listing_status_events WHERE listing_id = $1 AND actor_role = 'moderator' AND kind = 'status'",
       [id],
     );
     expect(rows[0].n).toBe(1);
@@ -346,7 +367,7 @@ describe("moderation", () => {
     expect(await readDraftPhoto(photosAs("mod-1"), id, photoId)).not.toBeNull();
     expect(await readDraftPhoto(photosAs("plain"), id, photoId)).toBeNull();
     expect(await readDraftPhoto(photosAs("owner-a"), id, photoId)).toBeNull();
-    await moderate(as("mod-1"), id, "approve", null);
+    await decideAs("mod-1", id, "approve", null);
     expect(await readDraftPhoto(photosAs("mod-1"), id, photoId)).toBeNull();
     expect(await readDraftPhoto(photosAs("owner-b"), id, photoId)).not.toBeNull();
   });
@@ -355,9 +376,9 @@ describe("moderation", () => {
 describe("audit history", () => {
   it("records every change with role and reason, and cannot be altered", async () => {
     const id = await inStatus("submitted");
-    await moderate(as("mod-1"), id, "request-changes", "  ფოტო ბნელია  ");
+    await decideAs("mod-1", id, "request-changes", "  ფოტო ბნელია  ");
     await submitForReview(as("owner-a"), id);
-    await moderate(as("mod-2"), id, "approve", null);
+    await decideAs("mod-2", id, "approve", null);
     const view = await ownerListingView(as("owner-a"), id);
     expect(view!.history.map((e) => [e.from, e.to, e.actorRole, e.reason])).toEqual([
       ["draft", "submitted", "owner", null],

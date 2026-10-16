@@ -19,7 +19,12 @@ import {
 } from "@/lib/photos/photo-service";
 import { addUser, depsFor, sampleDraft } from "../lib/drafts/draft-fixtures";
 import { jpeg, tempStorage } from "../lib/photos/photo-fixtures";
-import { type ReviewDeps, moderate, submitForReview } from "@/lib/review/review-service";
+import {
+  type ReviewDeps,
+  claimForReview,
+  moderate,
+  submitForReview,
+} from "@/lib/review/review-service";
 
 /*
  * OPT-IN integration tests against a real PostgreSQL SERVER through the `pg` driver (not PGlite).
@@ -210,9 +215,9 @@ run("real PostgreSQL server", () => {
     }
   });
 
-  it("accepts exactly one of many simultaneous moderation decisions (pg pool)", async () => {
+  it("assigns one claimer and accepts one decision among simultaneous ones (pg pool)", async () => {
     const owner = `real-rev-owner-${runId}`;
-    const mods = [`real-rev-mod1-${runId}`, `real-rev-mod2-${runId}`];
+    const mods = Array.from({ length: 6 }, (_, i) => `real-rev-mod${i + 1}-${runId}`);
     for (const id of [owner, ...mods]) await addUser(db, id);
     for (const id of mods) {
       await db.query("INSERT INTO user_roles (user_id, role) VALUES ($1, 'moderator')", [id]);
@@ -261,21 +266,33 @@ run("real PostgreSQL server", () => {
         limiters: limits(),
       });
       expect(await submitForReview(as(owner), saved.id)).toEqual({ ok: true });
+      // Six moderators claim at the same moment: exactly one gets the listing.
+      const claims = await Promise.all(mods.map((mod) => claimForReview(as(mod), saved.id)));
+      expect(claims.filter((r) => r.ok).length).toBe(1);
+      expect(claims.filter((r) => !r.ok && r.reason === "claimed").length).toBe(5);
+      const holder = mods[claims.findIndex((r) => r.ok)];
+      const other = mods.find((mod) => mod !== holder)!;
+      // Six simultaneous decisions (five by the holder, one by another moderator): one wins.
       const results = await Promise.all([
-        moderate(as(mods[0]), saved.id, "approve", null),
-        moderate(as(mods[1]), saved.id, "reject", "duplicate"),
-        moderate(as(mods[0]), saved.id, "request-changes", "fix"),
-        moderate(as(mods[1]), saved.id, "approve", null),
-        moderate(as(mods[0]), saved.id, "reject", "no"),
-        moderate(as(mods[1]), saved.id, "request-changes", "x"),
+        moderate(as(holder), saved.id, "approve", null),
+        moderate(as(holder), saved.id, "reject", "duplicate"),
+        moderate(as(holder), saved.id, "request-changes", "fix"),
+        moderate(as(other), saved.id, "approve", null),
+        moderate(as(holder), saved.id, "reject", "no"),
+        moderate(as(holder), saved.id, "request-changes", "x"),
       ]);
       expect(results.filter((r) => r.ok).length).toBe(1);
-      expect(results.filter((r) => !r.ok && r.reason === "conflict").length).toBe(5);
+      expect(results.filter((r) => !r.ok).length).toBe(5);
       const { rows } = await db.query<{ n: number }>(
-        "SELECT count(*)::int AS n FROM listing_status_events WHERE listing_id = $1 AND actor_role = 'moderator'",
+        "SELECT count(*)::int AS n FROM listing_status_events WHERE listing_id = $1 AND actor_role = 'moderator' AND kind = 'status'",
         [saved.id],
       );
       expect(rows[0].n).toBe(1);
+      const notes = await db.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM notifications WHERE listing_id = $1 AND user_id = $2",
+        [saved.id, owner],
+      );
+      expect(notes.rows[0].n).toBe(1);
     } finally {
       await temp.cleanup();
     }

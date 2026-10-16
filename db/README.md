@@ -22,28 +22,30 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 
 ## Layout
 
-| File                                         | Purpose                                                                                     |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `db/migrations/0001_initial_schema.sql`      | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
-| `db/migrations/0002_auth_accounts.sql`       | Better Auth tables, `listings.owner_user_id`                                                |
-| `db/migrations/0003_user_listing_drafts.sql` | private drafts of signed-in users (`data_source = 'user'`)                                  |
-| `db/migrations/0005_listing_moderation.sql`  | submission/moderation statuses, roles, immutable status events (see `docs/MODERATION.md`)   |
-| `db/migrations/0004_draft_photo_uploads.sql` | uploaded draft photos in `listing_images` (`source_kind = 'upload'`)                        |
-| `lib/drafts/*`                               | draft input whitelist, store (SQL), service (ownership), server wiring                      |
-| `lib/review/*`                               | status table, submission and moderation SQL/service (`docs/MODERATION.md`)                  |
-| `lib/photos/*`                               | photo processing, storage adapter, SQL, service, routes' helpers (see `docs/STORAGE.md`)    |
-| `lib/db/config.ts`                           | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
-| `lib/db/migrations.ts`                       | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
-| `lib/db/listing-query.ts`                    | SQL for the validated search (filters, budget, sort)                                        |
-| `lib/db/postgres-repository.ts`              | `ListingRepository` in SQL                                                                  |
-| `lib/db/mappers.ts`                          | rows → domain objects (the only NUMERIC → number boundary)                                  |
-| `lib/db/seed-demo.ts`                        | development-only demo seed                                                                  |
-| `lib/db/pg-client.ts`                        | `pg` pool (app) and single connection (scripts)                                             |
-| `lib/repository/*`                           | interface, memory backend, backend selection                                                |
-| `lib/data/listings.ts`                       | server-only, cached reads for pages                                                         |
-| `scripts/db.mts`                             | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
-| `scripts/roles.mts`                          | `roles -- list                                                                              | grant <email> | revoke <email>` (moderator role, local only) |
-| `scripts/photos.mts`                         | `photos:orphans` (unreferenced photo files; read-only unless `-- --delete`)                 |
+| File                                                      | Purpose                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `db/migrations/0001_initial_schema.sql`                   | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
+| `db/migrations/0002_auth_accounts.sql`                    | Better Auth tables, `listings.owner_user_id`                                                |
+| `db/migrations/0003_user_listing_drafts.sql`              | private drafts of signed-in users (`data_source = 'user'`)                                  |
+| `db/migrations/0004_draft_photo_uploads.sql`              | uploaded draft photos in `listing_images` (`source_kind = 'upload'`)                        |
+| `db/migrations/0005_listing_moderation.sql`               | submission/moderation statuses, roles, immutable status events (see `docs/MODERATION.md`)   |
+| `db/migrations/0006_review_assignments_notifications.sql` | claims, notifications, submission fingerprints, data-source/owner and photo guards          |
+| `lib/drafts/*`                                            | draft input whitelist, store (SQL), service (ownership), server wiring                      |
+| `lib/review/*`                                            | status table, submission, claims, moderation, history, change fingerprints                  |
+| `lib/notifications/*`                                     | in-app notifications of listing owners (read, mark as read)                                 |
+| `lib/photos/*`                                            | photo processing, storage adapter, SQL, service, routes' helpers (see `docs/STORAGE.md`)    |
+| `lib/db/config.ts`                                        | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
+| `lib/db/migrations.ts`                                    | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
+| `lib/db/listing-query.ts`                                 | SQL for the validated search (filters, budget, sort)                                        |
+| `lib/db/postgres-repository.ts`                           | `ListingRepository` in SQL                                                                  |
+| `lib/db/mappers.ts`                                       | rows → domain objects (the only NUMERIC → number boundary)                                  |
+| `lib/db/seed-demo.ts`                                     | development-only demo seed                                                                  |
+| `lib/db/pg-client.ts`                                     | `pg` pool (app) and single connection (scripts)                                             |
+| `lib/repository/*`                                        | interface, memory backend, backend selection                                                |
+| `lib/data/listings.ts`                                    | server-only, cached reads for pages                                                         |
+| `scripts/db.mts`                                          | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
+| `scripts/roles.mts`                                       | `roles -- list \| grant <email> \| revoke <email>` (moderator role, local only)             |
+| `scripts/photos.mts`                                      | `photos:orphans` (unreferenced photo files; read-only unless `-- --delete`)                 |
 
 ## Accounts (Step 1.21)
 
@@ -111,6 +113,35 @@ that enforce the transition table, the actor (owner or moderator, stated per tra
 photos outside draft/changes_requested. Only CHECK constraints are replaced; the migration test
 also allows a `BEFORE TRUNCATE ON …` trigger, which forbids truncation. Details:
 `docs/MODERATION.md`.
+
+## Moderation hardening (Step 1.25)
+
+`0006_review_assignments_notifications.sql` is additive (new columns, tables, constraints and
+triggers; two 0005 trigger functions get a stricter body through `CREATE OR REPLACE FUNCTION`; no
+row is changed). It adds:
+
+- **Guards from the Step 1.24 review.** `listing_photos_editable` now checks the old and the new
+  listing of an uploaded photo and refuses moving an upload to another listing at all.
+  `listings.data_source`, `properties.data_source` and a set `listings.owner_user_id` can never
+  change (triggers `listings_data_source_fixed`, `properties_data_source_fixed`,
+  `listings_owner_fixed`), so a demo row cannot become a user listing without history and a
+  listing cannot be handed to its reviewer.
+- **Claims.** `listings.review_claimed_by` and `review_claim_expires_at` (only on submitted
+  listings, both or neither). Trigger `listing_review_claim_change` lets only a moderator claim
+  for themselves (not their own listing), sets the expiry from the database clock (60 minutes),
+  refuses taking an unexpired claim of another moderator and lets only the holder release it.
+  The status trigger now requires the deciding moderator's unexpired claim and clears the claim
+  on every status change.
+- **Audit kinds.** `listing_status_events.kind` (`status`, `claim`, `release`; existing rows are
+  `status`), with a CHECK on the shape of claim/release rows. Still append-only.
+- **Notifications.** `notifications` (random `nt-` id, owner, listing, event, kind, `read_at`),
+  written by the status trigger in the decision's transaction; trigger
+  `notifications_only_read_state` allows only marking an unread notification as read.
+- **Submission fingerprints.** `listing_submission_fingerprints` (one row per submission event:
+  salted field fingerprints and the changed field names; append-only). Written by the
+  application in the submitting transaction.
+
+Details: `docs/MODERATION.md`.
 
 ## Schema notes
 

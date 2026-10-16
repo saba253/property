@@ -1,10 +1,12 @@
 import { connection } from "next/server";
 import { getAuth, getAuthStatus } from "@/lib/auth/instance";
+import { draftDeps } from "@/lib/drafts/instance";
+import { unreadCount } from "@/lib/notifications/notification-store";
 
 /*
  * GET /api/account/status: what the header needs, for the visitor's own session only: whether
- * accounts are on, whether they are signed in, and a display label. Never the session token or
- * other users' data; never cached.
+ * accounts are on, whether they are signed in, a display label and the number of their own
+ * unread notifications. Never the session token or other users' data; never cached.
  */
 export async function GET(request: Request) {
   // Always per request: without this, Next.js would prerender the answer at build time and
@@ -16,8 +18,12 @@ export async function GET(request: Request) {
   try {
     const session = await getAuth()!.api.getSession({ headers: request.headers });
     if (!session) return Response.json({ enabled: true, signedIn: false }, { headers });
+    // Only verified accounts have notifications (drafts and moderation need a verified email).
+    const unread = session.user.emailVerified
+      ? await draftDeps.withConnection((db) => unreadCount(db, session.user.id)).catch(() => null)
+      : 0;
     return Response.json(
-      { enabled: true, signedIn: true, name: session.user.name || null },
+      { enabled: true, signedIn: true, name: session.user.name || null, unread },
       { headers },
     );
   } catch (cause) {
