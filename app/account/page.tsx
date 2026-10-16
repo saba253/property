@@ -55,13 +55,16 @@ async function Account() {
           ჩემი განცხადებები
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          განცხადებების დამატება და მართვა ანგარიშიდან მომდევნო ეტაპზე გაიხსნება. მანამდე შეგიძლიათ
-          სცადოთ{" "}
-          <Link href="/properties/new" className="font-semibold text-accent-700 hover:underline">
-            დემო განცხადების მომზადება
-          </Link>{" "}
-          (არ ქვეყნდება).
+          შენახული დრაფტები პირადია და არ ქვეყნდება. გამოქვეყნება მომდევნო ეტაპზე დაემატება.
         </p>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
+          <Link href="/account/listings" className="text-accent-700 hover:underline">
+            ჩემი დრაფტები →
+          </Link>
+          <Link href="/properties/new" className="text-accent-700 hover:underline">
+            ახალი დრაფტი
+          </Link>
+        </div>
       </section>
 
       <SignOutButton />

@@ -30,6 +30,11 @@ export function assertValidDataset(dataset: MemoryDataset): void {
       validateListingRecord(l).map((i) => `${l.id}.${i.field}: ${i.message}`),
     ),
     ...validateListingImages(dataset.images).map((i) => `${i.field}: ${i.message}`),
+    // The demo seed writes demo data only (user drafts are created through the app).
+    ...dataset.properties
+      .filter((p) => p.dataSource !== "demo")
+      .map((p) => `${p.id}: not demo data`),
+    ...dataset.listings.filter((l) => l.dataSource !== "demo").map((l) => `${l.id}: not demo data`),
   ];
   if (problems.length > 0) throw new Error(`Invalid demo data:\n${problems.join("\n")}`);
 }

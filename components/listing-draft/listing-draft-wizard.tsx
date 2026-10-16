@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useReducer, useRef, useState } from "react";
 import { DraftPreview } from "@/components/listing-draft/draft-preview";
+import { DRAFT_RESUME_KEY, DraftSavePanel } from "@/components/listing-draft/draft-save-panel";
 import { fieldId } from "@/components/listing-draft/draft-fields";
 import {
   AmenitiesStep,
@@ -18,6 +19,7 @@ import {
   DRAFT_STEPS,
   type DraftField,
   type DraftPhoto,
+  type ListingDraft,
   buildDraftListing,
   getDraftFieldLabel,
   isDraftDirty,
@@ -28,6 +30,7 @@ import {
   createInitialDraftState,
   draftReducer,
 } from "@/lib/listing-draft/draft-state";
+import { parseDraftInput } from "@/lib/drafts/draft-input";
 import { assertNever } from "@/lib/properties/listing-types";
 import type { DistrictOption } from "@/lib/properties/cities";
 
@@ -35,7 +38,14 @@ type ListingDraftWizardProps = {
   rateState: ExchangeRateState;
   /** District suggestions (from listing data) for the location step. */
   districts: readonly DistrictOption[];
+  /** A stored private draft to edit (from the server, already checked to be the user's). */
+  initialDraft?: ListingDraft;
+  /** Its id; null for a new draft. */
+  draftId?: string | null;
 };
+
+/** The draft without photos, to compare with the last saved version. */
+const snapshot = (draft: ListingDraft) => JSON.stringify({ ...draft, photos: [] });
 
 /** Field order for moving focus to the first field with an error. */
 const FIELD_ORDER: readonly DraftField[] = [
@@ -69,8 +79,21 @@ function CheckIcon() {
  * component (useReducer with the pure draftReducer): nothing is sent to a server or saved, and
  * photos are shown from local object URLs that are released when no longer needed.
  */
-export function ListingDraftWizard({ rateState, districts }: ListingDraftWizardProps) {
-  const [state, dispatch] = useReducer(draftReducer, undefined, createInitialDraftState);
+export function ListingDraftWizard({
+  rateState,
+  districts,
+  initialDraft,
+  draftId: initialDraftId = null,
+}: ListingDraftWizardProps) {
+  const [state, dispatch] = useReducer(draftReducer, initialDraft, (draft) =>
+    draft
+      ? draftReducer(createInitialDraftState(), { type: "load", draft })
+      : createInitialDraftState(),
+  );
+  const [draftId, setDraftId] = useState<string | null>(initialDraftId);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(
+    initialDraft ? snapshot({ ...initialDraft, photos: [] }) : null,
+  );
   const [rejections, setRejections] = useState<PhotoRejection[]>([]);
   const [submitAttempt, setSubmitAttempt] = useState(0);
   const [confirmingReset, setConfirmingReset] = useState(false);
@@ -81,7 +104,23 @@ export function ListingDraftWizard({ rateState, districts }: ListingDraftWizardP
   const nextPhotoId = useRef(1);
 
   const step = DRAFT_STEPS[state.stepIndex];
-  const dirty = isDraftDirty(state.draft);
+  // Unsaved work: something entered that differs from the last version stored on the server.
+  const saved = savedSnapshot !== null && savedSnapshot === snapshot(state.draft);
+  const dirty = isDraftDirty(state.draft) && !(saved && state.draft.photos.length === 0);
+
+  // After signing in from this form, restore the entries parked in this tab (then forget them).
+  useEffect(() => {
+    if (initialDraft) return;
+    try {
+      const parked = sessionStorage.getItem(DRAFT_RESUME_KEY);
+      if (!parked) return;
+      sessionStorage.removeItem(DRAFT_RESUME_KEY);
+      const draft = parseDraftInput(JSON.parse(parked));
+      if (draft) dispatch({ type: "load", draft });
+    } catch {
+      // Nothing to restore.
+    }
+  }, [initialDraft]);
 
   // Remember the current photos so their object URLs can be released when the page unmounts.
   useEffect(() => {
@@ -368,11 +407,16 @@ export function ListingDraftWizard({ rateState, districts }: ListingDraftWizardP
           )}
         </div>
 
-        {step.id === "review" && (
-          <p className="mt-4 text-sm leading-6 text-muted">
-            გამოქვეყნება ამ ეტაპზე შეუძლებელია: ეს არის დემო ფუნქცია. დრაფტი არსად იგზავნება და არ
-            ინახება — გვერდის განახლების ან დახურვის შემდეგ ის დაიკარგება.
-          </p>
+        {step.id === "review" && preview && (
+          <DraftSavePanel
+            draft={state.draft}
+            draftId={draftId}
+            saved={saved}
+            onSaved={(id) => {
+              setDraftId(id);
+              setSavedSnapshot(snapshot(state.draft));
+            }}
+          />
         )}
       </form>
     </div>

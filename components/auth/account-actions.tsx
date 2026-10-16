@@ -3,6 +3,7 @@
 import { type FormEvent, useId, useState } from "react";
 import { authRequest } from "@/components/auth/auth-request";
 import { FormMessage } from "@/components/auth/auth-shell";
+import { useHydrated } from "@/components/auth/use-hydrated";
 import { buttonPrimary, buttonSecondary, fieldInput, fieldLabel } from "@/components/ui/styles";
 import { AUTH_MESSAGES, MAX_NAME_LENGTH, normalizeName } from "@/lib/auth/validation";
 
@@ -10,6 +11,7 @@ import { AUTH_MESSAGES, MAX_NAME_LENGTH, normalizeName } from "@/lib/auth/valida
 export function ProfileForm({ name }: { name: string }) {
   const id = useId();
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   const [message, setMessage] = useState<{ tone: "info" | "error"; text: string } | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -30,7 +32,7 @@ export function ProfileForm({ name }: { name: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form method="post" onSubmit={onSubmit} className="space-y-3">
       <div>
         <label htmlFor={id} className={fieldLabel}>
           სახელი
@@ -45,7 +47,11 @@ export function ProfileForm({ name }: { name: string }) {
         />
       </div>
       {message && <FormMessage tone={message.tone}>{message.text}</FormMessage>}
-      <button type="submit" disabled={pending} className={`${buttonSecondary} disabled:opacity-60`}>
+      <button
+        type="submit"
+        disabled={pending || !hydrated}
+        className={`${buttonSecondary} disabled:opacity-60`}
+      >
         {pending ? "ინახება…" : "შენახვა"}
       </button>
     </form>

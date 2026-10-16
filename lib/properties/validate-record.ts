@@ -81,8 +81,8 @@ export function validatePropertyRecord(property: Property): RecordIssue[] {
       issues.push({ field: "location", message: "invalid exact location" });
     }
   }
-  if (property.dataSource !== "demo") {
-    issues.push({ field: "dataSource", message: "only demo records can be stored" });
+  if (property.dataSource !== "demo" && property.dataSource !== "user") {
+    issues.push({ field: "dataSource", message: "only demo or user records can be stored" });
   }
   return issues;
 }
@@ -113,8 +113,22 @@ export function validateListingRecord(listing: Listing): RecordIssue[] {
   if (listing.transactionType === "rent" && listing.rentPeriod !== "month") {
     issues.push({ field: "rentPeriod", message: "monthly rent only" });
   }
-  if (listing.dataSource !== "demo") {
-    issues.push({ field: "dataSource", message: "only demo records can be stored" });
+  if (listing.dataSource !== "demo" && listing.dataSource !== "user") {
+    issues.push({ field: "dataSource", message: "only demo or user records can be stored" });
+  }
+  // Same rules as the database: user data stays a private draft; drafts are user data.
+  if (
+    listing.dataSource === "user" &&
+    listing.status !== "draft" &&
+    listing.status !== "archived"
+  ) {
+    issues.push({ field: "status", message: "user listings cannot be published yet" });
+  }
+  if (
+    (listing.status === "draft" || listing.status === "archived") &&
+    listing.dataSource !== "user"
+  ) {
+    issues.push({ field: "status", message: "only user listings can be drafts" });
   }
   return issues;
 }

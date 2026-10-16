@@ -1,0 +1,10 @@
+{
+  "name": "property-local-dev",
+  "private": true,
+  "description": "Local development infrastructure only (never deployed, not installed by CI): a user-space PostgreSQL server and an SMTP catcher.",
+  "type": "module",
+  "dependencies": {
+    "embedded-postgres": "18.4.0-beta.17",
+    "smtp-server": "3.19.16"
+  }
+}

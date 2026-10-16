@@ -72,8 +72,13 @@ export function resolveAuthConfig(env: Env): AuthConfig {
     }
     if (!base || (base.protocol !== "https:" && base.protocol !== "http:")) {
       reasons.push("invalid-base-url");
-    } else if (production && base.protocol !== "https:") {
-      // Secure cookies need HTTPS; plain HTTP is accepted for local development only.
+    } else if (
+      production &&
+      base.protocol !== "https:" &&
+      !["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)
+    ) {
+      // Secure cookies need HTTPS. Plain HTTP is accepted only for this computer (development, or
+      // a local production build): browsers treat http://localhost as a secure origin.
       reasons.push("insecure-base-url");
     }
   }
@@ -109,7 +114,7 @@ export const AUTH_DISABLED_REASON_TEXT: Record<AuthDisabledReason, string> = {
   "weak-secret": `BETTER_AUTH_SECRET must be at least ${MIN_SECRET_LENGTH} random characters.`,
   "missing-base-url": "BETTER_AUTH_URL is missing.",
   "invalid-base-url": "BETTER_AUTH_URL is not an http(s) URL.",
-  "insecure-base-url": "BETTER_AUTH_URL must use https in production.",
+  "insecure-base-url": "BETTER_AUTH_URL must use https in production (except http://localhost).",
   "missing-email-transport": "AUTH_SMTP_URL is missing (verification and reset emails).",
   "invalid-email-transport": "AUTH_SMTP_URL must start with smtp:// or smtps://.",
   "missing-email-from": "AUTH_EMAIL_FROM is missing.",

@@ -22,19 +22,22 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 
 ## Layout
 
-| File                                    | Purpose                                                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `db/migrations/0001_initial_schema.sql` | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
-| `lib/db/config.ts`                      | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
-| `lib/db/migrations.ts`                  | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
-| `lib/db/listing-query.ts`               | SQL for the validated search (filters, budget, sort)                                        |
-| `lib/db/postgres-repository.ts`         | `ListingRepository` in SQL                                                                  |
-| `lib/db/mappers.ts`                     | rows → domain objects (the only NUMERIC → number boundary)                                  |
-| `lib/db/seed-demo.ts`                   | development-only demo seed                                                                  |
-| `lib/db/pg-client.ts`                   | `pg` pool (app) and single connection (scripts)                                             |
-| `lib/repository/*`                      | interface, memory backend, backend selection                                                |
-| `lib/data/listings.ts`                  | server-only, cached reads for pages                                                         |
-| `scripts/db.mts`                        | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
+| File                                         | Purpose                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `db/migrations/0001_initial_schema.sql`      | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
+| `db/migrations/0002_auth_accounts.sql`       | Better Auth tables, `listings.owner_user_id`                                                |
+| `db/migrations/0003_user_listing_drafts.sql` | private drafts of signed-in users (`data_source = 'user'`)                                  |
+| `lib/drafts/*`                               | draft input whitelist, store (SQL), service (ownership), server wiring                      |
+| `lib/db/config.ts`                           | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
+| `lib/db/migrations.ts`                       | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
+| `lib/db/listing-query.ts`                    | SQL for the validated search (filters, budget, sort)                                        |
+| `lib/db/postgres-repository.ts`              | `ListingRepository` in SQL                                                                  |
+| `lib/db/mappers.ts`                          | rows → domain objects (the only NUMERIC → number boundary)                                  |
+| `lib/db/seed-demo.ts`                        | development-only demo seed                                                                  |
+| `lib/db/pg-client.ts`                        | `pg` pool (app) and single connection (scripts)                                             |
+| `lib/repository/*`                           | interface, memory backend, backend selection                                                |
+| `lib/data/listings.ts`                       | server-only, cached reads for pages                                                         |
+| `scripts/db.mts`                             | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
 
 ## Accounts (Step 1.21)
 
@@ -44,6 +47,30 @@ quoted. It also adds `listings.owner_user_id`, the future owner. The column is n
 required to be NULL for demo listings, and blocks deleting a user who owns listings.
 `tests/lib/auth/schema-and-limits.test.ts` checks with Better Auth itself that the schema is
 complete. See `docs/AUTH.md`.
+
+## Private drafts (Step 1.22)
+
+`0003_user_listing_drafts.sql` lets signed-in users keep private listing drafts. A draft is an
+ordinary property + listing pair with `data_source = 'user'`, `status = 'draft'` and a required
+`owner_user_id`. The migration only widens CHECK lists and adds constraints (no table, column or
+row is removed):
+
+- `user_listings_have_owner`: every user listing has an owner (demo listings never have one, 0002).
+- `drafts_are_user_data`: `draft`/`archived` only for user data.
+- `user_listings_not_public_yet`: user listings can only be `draft` or `archived`. No code path
+  can publish one by mistake; a future review/publishing migration relaxes this.
+- Index `listings_owner_drafts (owner_user_id, updated_at DESC) WHERE data_source = 'user'`.
+
+Lifecycle: draft → (later) submitted for review → published → archived. Today only draft and
+archived exist. "წაშლა" in the UI archives (reversible, kept in the database); nothing is
+hard-deleted. Public queries read `data_source = 'demo'` and `status = 'active'` only, so drafts
+never appear in search, counts, facets, the map, batch lookups or comparables (tested).
+
+`lib/drafts/draft-store.ts` writes in one transaction (property, listing, features, equipment)
+with parameterized SQL; updates lock the row with `SELECT … FOR UPDATE` scoped to the owner.
+`draft-service.ts` takes the owner only from the verified session; a request cannot name an
+owner, status, id or data source. At most 50 drafts per user; 30 saves per 10 minutes per user
+(per process). Photos are not stored.
 
 ## Schema notes
 
@@ -63,8 +90,9 @@ complete. See `docs/AUTH.md`.
 - **Limits.** The same ranges as the listing form (`DETAIL_FIELDS`, `PRICE_LIMITS`, text lengths)
   are enforced by CHECKs and by `lib/properties/validate-record.ts`. The tests check that both
   layers reject the same cases.
-- **Status.** `active` and `inactive` only. Moderation states (draft, pending review, rejected,
-  archived) will come in a later migration together with the code that uses them.
+- **Status.** `draft`, `active`, `inactive`, `archived` (since 0003). `draft` and `archived` exist
+  only for user data; user data can only be `draft` or `archived` until review and publishing
+  exist (see below). Pending review and rejected will come with the code that uses them.
   `published_at` stays NULL unless actually known (demo data has none).
 - **Location.** `exact` needs coordinates plus a verification date; `approximate` needs an area id;
   `unknown` has neither.
@@ -182,26 +210,94 @@ It was **not adopted yet**: it still lacks the GEL and no-rate variants, `isConv
 list of comparables shown on the page, and detail pages are cached anyway. It is the next
 optimization when real inventory makes candidate sets large.
 
-## Local development (optional)
+## Local development
 
-Requires your own local PostgreSQL. **Nothing is installed or created for you.**
+The verified setup is option B with the Windows PostgreSQL 18 service (`property_intelligence_dev`,
+role `property_app`, 127.0.0.1:5432) plus the SMTP catcher from option A (`mail.mjs`); see the
+workflow table in `docs/AUTH.md`. Two options. **Nothing is installed system-wide**: no PostgreSQL installer, service, Docker or
+administrator rights.
 
-1. Create a local database, for example `property_dev`.
-2. Create `.env.local` (never committed):
-   ```
-   DATABASE_URL=postgres://property_dev@localhost:5432/property_dev
-   ```
-3. Run `npm run db:status`, then `npm run db:migrate`, then `npm run db:seed:demo`.
-4. Start the site on the database: set `DATA_BACKEND=postgres` in `.env.local` and run
-   `npm run dev`.
+### A. The bundled local server (recommended, Step 1.22)
+
+`tools/local-dev/` has its own `package.json` (CI never installs it). It runs a real PostgreSQL 18
+server from the `embedded-postgres` npm package as an ordinary user process, plus a local SMTP
+catcher. In separate terminals, from the project folder:
+
+```
+npm install --prefix tools/local-dev
+node tools/local-dev/postgres.mjs
+node tools/local-dev/mail.mjs
+node tools/local-dev/setup-env.mjs
+npm run db:migrate
+npm run db:seed:demo
+npm run dev
+```
+
+- `postgres.mjs` listens on `127.0.0.1:5433` only (scram-sha-256 password). On first start it
+  creates the cluster in `.data/postgres` (UTF-8, locale C) with a generated password in
+  `.data/local-dev.json`, and the databases `property_dev` and `property_test`. Ctrl+C stops it;
+  the data stays. `.data/` is git-ignored.
+- `mail.mjs` accepts mail on `127.0.0.1:1025` and saves each message as an `.eml` file in
+  `.data/mail` (open with any mail program). Nothing leaves the computer. It prints only a count,
+  never links.
+- `setup-env.mjs` writes `.env.local` once (database URL, `AUTH_ENABLED=true`, a generated
+  secret, the SMTP catcher). It never overwrites an existing file and prints no secrets.
+- After pulling new migrations, run `npm run db:status` and `npm run db:migrate` (a dev
+  database created before 0003 cannot store drafts until it is migrated).
+- Reset only if you want to: stop the server and delete `.data/postgres` yourself. No script does it.
+
+### B. Your own PostgreSQL (e.g. the Windows installer)
+
+1. Create a UTF-8 database, for example `property_intelligence_dev` (pgAdmin 4 or `createdb`).
+2. In your own terminal run
+   `node tools/local-dev/setup-pg-role.mjs --port 5432 --database property_intelligence_dev`.
+   It asks for the `postgres` password without showing it (never stored), creates the login role
+   `property_app` (no superuser, CREATEDB or CREATEROLE; CONNECT on the database, USAGE and
+   CREATE on schema `public`; only a SCRAM verifier of its generated password is sent), creates
+   an empty `<database>_test` owned by it, and writes `.env.local` (`DATABASE_URL`,
+   `TEST_DATABASE_URL`; `DATA_BACKEND=postgres` and `AUTH_ENABLED=false` only if those lines are
+   missing; every other line is kept; the previous file is saved as `.env.local.backup-<time>`).
+   It stops without changes if the database already holds tables this project did not create.
+
+   **Password rotation:** `node tools/local-dev/setup-pg-role.mjs --rotate`. Order: idempotent
+   grants and test database first; the complete new `.env.local` is written to
+   `.env.local.rotation-pending`; then `ALTER ROLE … PASSWORD` (SCRAM verifier only); then
+   `.env.local` is replaced atomically and the pending file removed; finally a sign-in with the new
+   password is checked. If the password changed but `.env.local` could not be written, rename
+   `.env.local.rotation-pending` to `.env.local`. If the password change failed, nothing changed.
+   A leftover pending file blocks the next run until you resolve it. Restart `npm run dev`
+   afterwards. Data is never touched.
+
+3. Run `npm run db:status`, `npm run db:migrate`, `npm run db:seed:demo`, then restart
+   `npm run dev` (the data backend is chosen when the server starts).
+
+To serve listings from the database, set `DATA_BACKEND=postgres`; accounts and drafts need only
+`DATABASE_URL` (see `docs/AUTH.md`).
 
 Safety:
 
 - Every script requires an explicit `DATABASE_URL` and refuses non-local hosts. Only
   `db:migrate --allow-remote` can override this, for a future deliberate deployment step.
+- Migrations refuse a database whose encoding is not UTF-8 (Georgian text; a Windows default
+  cluster can be WIN1252).
 - The demo seed never runs in production and never overwrites non-demo rows.
 - There is no reset or drop command. Migrations only move forward.
 - The scripts use Node's built-in TypeScript support (Node 22.18+ or 23.6+).
+
+### Tests against a real server
+
+`npm test` uses PGlite. `tests/integration/real-postgres.test.ts` also runs against a PostgreSQL
+server when `TEST_DATABASE_URL` points to a disposable local test database (non-local hosts are
+skipped), for example `property_test` of the bundled server. It migrates and seeds that database
+and creates new, uniquely named test users on each run. It checks
+UTF-8, Better Auth sign-up/verification/sign-in/reset through the `pg` driver, and draft isolation.
+Without the variable, these tests are skipped.
+
+Uncached reads (`searchListings`, `countListings`, `getListingsByIds`, `getListingCoversUncached`
+in `lib/data/listings.ts`) start with `await connection()`. With a real server, opening a `pg`
+connection uses `crypto.getRandomValues()` for the SCRAM exchange, which Next.js reports as an
+error if it happens while prerendering or validating a runtime prefetch (seen in `next dev`
+with the Windows service; PGlite never showed it).
 
 With `DATA_BACKEND=postgres`, `next build` reads the database while prerendering. Each build
 worker has its own pool (max. 5), so a build with many workers can open about 5 × workers

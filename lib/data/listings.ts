@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife } from "next/cache";
+import { connection } from "next/server";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import type {
   ListingCount,
@@ -31,6 +32,10 @@ function listingCacheLife() {
  * ("use cache"; see listingCacheLife), so a database is not queried on every request
  * and static pages stay static. Searches depend on the query and run per request (inside the
  * page's <Suspense>), without caching. Database errors are thrown (never replaced by demo data).
+ *
+ * The uncached reads start with `await connection()`: they always belong to a request. Opening a
+ * PostgreSQL connection uses randomness (the SCRAM password exchange), which Next.js does not
+ * allow while it prerenders or validates a runtime prefetch.
  */
 
 export async function getListing(id: string) {
@@ -96,20 +101,24 @@ export async function getFeaturedSaleListings(limit: number) {
  * chosen by visitors, so caching them would let anyone fill the cache.
  */
 export async function getListingsByIds(ids: readonly string[]) {
+  await connection();
   return (await getListingRepository()).getListingsByIds(ids);
 }
 
 /** Covers for a batch of ids, without caching (see getListingsByIds). */
 export async function getListingCoversUncached(listingIds: readonly string[]) {
+  await connection();
   return (await getListingRepository()).getListingCovers(listingIds);
 }
 
 export async function searchListings(query: ListingSearchQuery): Promise<ListingSearchResult> {
+  await connection();
   return (await getListingRepository()).searchListings(query);
 }
 
 export async function countListings(
   query: Omit<ListingSearchQuery, "sort" | "page">,
 ): Promise<ListingCount> {
+  await connection();
   return (await getListingRepository()).countListings(query);
 }

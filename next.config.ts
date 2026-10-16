@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   experimental: {
-    agentFeedback: true,
+    // Off: when on, `next dev` writes agent instructions into AGENTS.md that ask coding agents to
+    // send feedback to Next.js. Decided by the project owner on 2026-10-16.
+    agentFeedback: false,
   },
   cacheComponents: true,
   // Saved searches were removed after Step 1.17; old bookmarks open the ordinary search.

@@ -22,6 +22,7 @@ describe("migration files", () => {
     expect(migrations.map((m) => `${m.version}_${m.name}`)).toEqual([
       "0001_initial_schema",
       "0002_auth_accounts",
+      "0003_user_listing_drafts",
     ]);
     expect(migrationChecksum("a\r\nb")).toBe(migrationChecksum("a\nb"));
     expect(() => parseMigrations([{ file: "1_bad.sql", sql: "" }])).toThrow("Unexpected");
@@ -35,7 +36,13 @@ describe("migration files", () => {
 
   it("contain no destructive statements", () => {
     for (const { sql } of loadMigrations()) {
-      expect(sql).not.toMatch(/\b(DROP|TRUNCATE)\b/i);
+      // Replacing a CHECK constraint (DROP CONSTRAINT + ADD CONSTRAINT) removes no data; every
+      // other DROP, TRUNCATE or DELETE is forbidden.
+      const withoutConstraintSwaps = sql.replace(
+        /DROP CONSTRAINT\s+\w+;\s*ALTER TABLE \w+ ADD CONSTRAINT/gi,
+        "",
+      );
+      expect(withoutConstraintSwaps).not.toMatch(/\b(DROP|TRUNCATE)\b/i);
       expect(sql).not.toMatch(/\bDELETE\s+FROM\b/i);
     }
   });
@@ -45,13 +52,14 @@ describe("running migrations", () => {
   it("applies pending migrations once and records them", async () => {
     db = await createTestDatabase({ migrate: false });
     const migrations = loadMigrations();
-    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002"]);
+    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002", "0003"]);
     expect(await runMigrations(db, migrations)).toEqual([]);
     const status = await getMigrationStatus(db, migrations);
     expect(status.pending).toEqual([]);
     expect(status.applied).toEqual([
       { version: "0001", name: "initial_schema" },
       { version: "0002", name: "auth_accounts" },
+      { version: "0003", name: "user_listing_drafts" },
     ]);
     const { rows } = await db.query<{ count: number }>("SELECT count(*)::int AS count FROM cities");
     expect(rows[0].count).toBe(2);
@@ -67,11 +75,11 @@ describe("running migrations", () => {
     db = await createTestDatabase();
     const broken = parseMigrations([
       ...loadMigrations().map((m) => ({ file: `${m.version}_${m.name}.sql`, sql: m.sql })),
-      { file: "0003_broken.sql", sql: "CREATE TABLE half_done (id int); SELECT 1/0;" },
+      { file: "0099_broken.sql", sql: "CREATE TABLE half_done (id int); SELECT 1/0;" },
     ]);
     await expect(runMigrations(db, broken)).rejects.toThrow();
     const { rows } = await db.query("SELECT to_regclass('half_done') AS t");
     expect(rows[0]).toEqual({ t: null });
-    expect((await getMigrationStatus(db, broken)).pending.map((m) => m.version)).toEqual(["0003"]);
+    expect((await getMigrationStatus(db, broken)).pending.map((m) => m.version)).toEqual(["0099"]);
   });
 });

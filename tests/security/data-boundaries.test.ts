@@ -63,6 +63,24 @@ describe("data access boundaries", () => {
     }
   });
 
+  it("never lets the browser submit account forms itself (passwords in the URL)", () => {
+    // Found in browser testing: a click before hydration made the browser send the login form
+    // as GET, so the password ended up in the address bar. Every account form posts (body, not
+    // URL) and keeps its submit button disabled until React handles the submit.
+    let forms = 0;
+    for (const file of files(join(root, "components", "auth"))) {
+      const text = code(file);
+      for (const tag of text.match(/<form\b[^>]*>/g) ?? []) {
+        forms += 1;
+        expect(tag, file).toContain('method="post"');
+      }
+      for (const button of text.match(/<button\s[^>]*type="submit"[^>]*>/g) ?? []) {
+        expect(button, file).toContain("!hydrated");
+      }
+    }
+    expect(forms).toBeGreaterThanOrEqual(5);
+  });
+
   it("never caches or prerenders account data", () => {
     for (const page of ["account", "login", "register", "forgot-password", "reset-password"]) {
       const text = source(join(root, "app", page, "page.tsx"));
@@ -77,6 +95,37 @@ describe("data access boundaries", () => {
       "await connection()",
     );
     expect(status).not.toContain("session.token");
+  });
+
+  it("keeps the private draft store on the server and the draft pages private", () => {
+    for (const file of all.filter(isClient)) {
+      expect(source(file), file).not.toMatch(
+        /from "@\/lib\/drafts\/(draft-store|draft-service|instance)"/,
+      );
+    }
+    expect(source(join(root, "lib", "drafts", "instance.ts"))).toMatch(/^import "server-only";/);
+    expect(source(join(root, "app", "account", "listings", "actions.ts"))).toMatch(
+      /^"use server";/,
+    );
+    for (const page of [
+      join(root, "app", "account", "listings", "page.tsx"),
+      join(root, "app", "account", "listings", "edit", "page.tsx"),
+    ]) {
+      expect(code(page), page).toContain("connection()");
+      expect(code(page), page).not.toContain('"use cache"');
+      expect(source(page), page).toMatch(/robots: \{ index: false, follow: false \}/);
+    }
+    // Draft SQL also uses parameters only.
+    for (const file of files(join(root, "lib", "drafts"))) {
+      const sqlLines = source(file)
+        .split("\n")
+        .filter((l) => /\b(SELECT|INSERT|UPDATE|DELETE|WHERE|VALUES|SET)\b/.test(l));
+      for (const line of sqlLines) {
+        expect(line, file).not.toMatch(
+          /\$\{(input|draft|item|ownerId|userId|listingId|draftId)[.}]/,
+        );
+      }
+    }
   });
 
   it("marks the page data module as server-only", () => {

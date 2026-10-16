@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { authRequest } from "@/components/auth/auth-request";
+import { useAccountStatus } from "@/components/auth/use-account-status";
 
 /*
  * Account entry in the header menu. The server (and the first render) always show "შესვლა",
@@ -12,8 +12,6 @@ import { authRequest } from "@/components/auth/auth-request";
  * whether this visitor is signed in; then "ჩემი ანგარიში" and "გამოსვლა" replace it. Nothing about
  * the session is stored in the browser beyond Better Auth's HttpOnly cookie.
  */
-
-type Status = { enabled: boolean; signedIn: boolean; name?: string | null };
 
 function PersonIcon() {
   return (
@@ -28,21 +26,8 @@ const item =
 
 /** Account entry at the top of the header menu (the header itself has no room left). */
 export function HeaderAccount() {
-  const [status, setStatus] = useState<Status | null>(null);
+  const status = useAccountStatus();
   const pathname = usePathname();
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/account/status", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: Status | null) => {
-        if (!cancelled && data) setStatus(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
 
   if (!status?.signedIn) {
     const loginHref =

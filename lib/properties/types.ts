@@ -11,10 +11,10 @@ export type Money = {
 
 /**
  * Where data comes from. "demo": invented examples. "local-draft": a listing someone is preparing
- * in their browser on /properties/new; it is never published, stored or listed anywhere.
- * Adding "real" later will be a deliberate change.
+ * in their browser on /properties/new (not stored). "user": entered by a signed-in user and stored
+ * as their private draft (never public until review and publishing exist).
  */
-export type DataSource = "demo" | "local-draft";
+export type DataSource = "demo" | "local-draft" | "user";
 
 /**
  * Supported property types. Land plots and commercial property are planned: add them here,
@@ -122,7 +122,11 @@ export type HouseProperty = PropertyBase &
 /** The physical thing: facts about the building, apartment, or house itself. */
 export type Property = ApartmentProperty | HouseProperty;
 
-export type ListingStatus = "active" | "inactive";
+/**
+ * "active": public. "inactive": ended. "draft": private draft of its owner (data source "user").
+ * "archived": a draft removed by its owner (kept, reversible). Only "active" is ever searched.
+ */
+export type ListingStatus = "draft" | "active" | "inactive" | "archived";
 
 type ListingBase = {
   id: string;

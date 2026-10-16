@@ -87,10 +87,24 @@ export async function getMigrationStatus(
 }
 
 /** Applies pending migrations in order; returns the versions applied in this run. */
+/** Georgian text needs a UTF-8 database (Windows installers may default to WIN1252). */
+export async function assertUtf8Database(connection: SqlConnection): Promise<void> {
+  const { rows } = await connection.query<{ encoding: string }>(
+    "SELECT pg_encoding_to_char(encoding) AS encoding FROM pg_database WHERE datname = current_database()",
+  );
+  const encoding = rows[0]?.encoding;
+  if (encoding !== "UTF8") {
+    throw new Error(
+      `The database uses ${encoding ?? "an unknown"} encoding; create it with ENCODING 'UTF8'.`,
+    );
+  }
+}
+
 export async function runMigrations(
   connection: SqlConnection,
   migrations: readonly Migration[],
 ): Promise<string[]> {
+  await assertUtf8Database(connection);
   const { pending } = await getMigrationStatus(connection, migrations);
   const appliedNow: string[] = [];
   for (const migration of pending) {

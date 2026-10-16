@@ -41,7 +41,9 @@ export type DraftAction =
   | { type: "next" }
   | { type: "back" }
   | { type: "go-to-step"; stepIndex: number }
-  | { type: "reset" };
+  | { type: "reset" }
+  /** Replaces the form with a stored or restored draft and opens the review step. */
+  | { type: "load"; draft: ListingDraft };
 
 export const LAST_STEP_INDEX = DRAFT_STEPS.length - 1;
 
@@ -155,6 +157,13 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
     }
     case "reset":
       return createInitialDraftState();
+    case "load":
+      return {
+        draft: { ...action.draft, photos: [] },
+        stepIndex: LAST_STEP_INDEX,
+        furthestStepIndex: LAST_STEP_INDEX,
+        errors: {},
+      };
     default: {
       const unexpected: never = action;
       return unexpected;

@@ -55,7 +55,11 @@ describe("authentication configuration gate", () => {
     expect(reasons({ DATABASE_URL: "mysql://x" })).toEqual(["invalid-database-url"]);
     expect(reasons({ BETTER_AUTH_URL: "ftp://x" })).toEqual(["invalid-base-url"]);
     expect(reasons({ AUTH_SMTP_URL: "https://mail.example" })).toEqual(["invalid-email-transport"]);
-    expect(reasons({ NODE_ENV: "production" })).toEqual(["insecure-base-url"]);
+    expect(reasons({ NODE_ENV: "production", BETTER_AUTH_URL: "http://example.ge" })).toEqual([
+      "insecure-base-url",
+    ]);
+    // A local production build on this computer may use http://localhost.
+    expect(reasons({ NODE_ENV: "production" })).toEqual([]);
     expect(reasons({ NODE_ENV: "production", BETTER_AUTH_URL: "https://example.ge" })).toEqual([]);
   });
 

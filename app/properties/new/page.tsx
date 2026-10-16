@@ -12,9 +12,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Demo listing draft workflow. Everything happens in the browser: the draft is never sent to the
- * server, stored, or published. The server only provides the cached NBG rate for the price
- * preview and district suggestions taken from the listing data.
+ * Listing draft workflow. The form works in the browser; nothing is ever published. Signed-in
+ * users can store the reviewed draft privately (DraftSavePanel, Server Action); otherwise it
+ * lives only in this tab. The server provides the cached NBG rate and district suggestions.
  */
 export default async function NewListingPage() {
   const rateState = await getExchangeRateState();
@@ -36,9 +36,10 @@ export default async function NewListingPage() {
       </div>
 
       <div className="mt-5 max-w-3xl">
-        <DemoNotice title="არაფერი ქვეყნდება და არაფერი ინახება.">
-          დრაფტი არსებობს მხოლოდ ამ ბრაუზერის ჩანართში. ავტომატური შენახვა არ არის: გვერდის
-          განახლების ან დახურვის შემდეგ შეყვანილი მონაცემები და ფოტოები დაიკარგება.
+        <DemoNotice title="არაფერი ქვეყნდება.">
+          ანგარიშით შესულს შეუძლია დრაფტის პირადად შენახვა ბოლო ნაბიჯზე. სხვა შემთხვევაში დრაფტი
+          მხოლოდ ამ ჩანართშია და გვერდის განახლების ან დახურვის შემდეგ დაიკარგება. ფოტოები ჯერ არსად
+          ინახება.
         </DemoNotice>
       </div>
 

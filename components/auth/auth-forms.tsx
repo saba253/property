@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useId, useState } from "react";
 import { authRequest } from "@/components/auth/auth-request";
 import { FormMessage } from "@/components/auth/auth-shell";
+import { useHydrated } from "@/components/auth/use-hydrated";
 import { buttonPrimary, buttonSecondary, fieldInput, fieldLabel } from "@/components/ui/styles";
 import {
   AUTH_MESSAGES,
@@ -88,6 +89,7 @@ function errorMessage(status: number, code: string | null): string {
 
 export function LoginForm({ next, google }: { next: string; google: boolean }) {
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   const [message, setMessage] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -127,7 +129,7 @@ export function LoginForm({ next, google }: { next: string; google: boolean }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-4">
       {message && <FormMessage tone="error">{message}</FormMessage>}
       <Field name="email" label="ელფოსტა" type="email" autoComplete="email" />
       <Field name="password" label="პაროლი" type="password" autoComplete="current-password" />
@@ -141,7 +143,7 @@ export function LoginForm({ next, google }: { next: string; google: boolean }) {
       </div>
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !hydrated}
         className={`${buttonPrimary} w-full disabled:opacity-60`}
       >
         {pending ? "მიმდინარეობს…" : "შესვლა"}
@@ -171,6 +173,7 @@ export function LoginForm({ next, google }: { next: string; google: boolean }) {
 
 export function RegisterForm() {
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -211,7 +214,7 @@ export function RegisterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-4">
       {message && <FormMessage tone="error">{message}</FormMessage>}
       <Field
         name="name"
@@ -241,7 +244,7 @@ export function RegisterForm() {
       />
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !hydrated}
         className={`${buttonPrimary} w-full disabled:opacity-60`}
       >
         {pending ? "მიმდინარეობს…" : "რეგისტრაცია"}
@@ -258,6 +261,7 @@ export function RegisterForm() {
 
 export function ForgotPasswordForm() {
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -290,12 +294,12 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-4">
       {error && <FormMessage tone="error">{error}</FormMessage>}
       <Field name="email" label="ელფოსტა" type="email" autoComplete="email" />
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !hydrated}
         className={`${buttonPrimary} w-full disabled:opacity-60`}
       >
         {pending ? "მიმდინარეობს…" : "ბმულის გაგზავნა"}
@@ -306,6 +310,7 @@ export function ForgotPasswordForm() {
 
 export function ResetPasswordForm({ token }: { token: string | null }) {
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -353,7 +358,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-4">
       {message && <FormMessage tone="error">{message}</FormMessage>}
       <Field
         name="password"
@@ -373,7 +378,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       />
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !hydrated}
         className={`${buttonPrimary} w-full disabled:opacity-60`}
       >
         {pending ? "მიმდინარეობს…" : "პაროლის შეცვლა"}

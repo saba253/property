@@ -6,6 +6,7 @@ import type {
   Listing,
   ListingEquipmentKey,
   ListingImage,
+  ListingStatus,
   Property,
   PropertyFeatureKey,
   PropertyLocation,
@@ -26,8 +27,8 @@ export type ListingRow = {
   rent_period: "month" | null;
   asking_amount: string;
   asking_currency: Currency;
-  status: "active" | "inactive";
-  data_source: "demo";
+  status: ListingStatus;
+  data_source: "demo" | "user";
   property_type: "apartment" | "house";
   city: string;
   district: string;
@@ -44,7 +45,7 @@ export type ListingRow = {
   latitude: string | null;
   longitude: string | null;
   location_verified_on: string | null;
-  property_data_source: "demo";
+  property_data_source: "demo" | "user";
 };
 
 export type FeatureRow = { owner_id: string; key: string; status: AmenityStatus };
