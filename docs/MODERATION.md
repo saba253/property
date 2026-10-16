@@ -62,6 +62,33 @@ transaction (change tracking, below).
   the HTTP status is 200 with the 404 content, as for the other private pages); no queue entry,
   listing content, history or photo is included.
 
+## Owner-administrator (migration 0007)
+
+For a single operator who manages every listing. The administrator is an ordinary verified
+account with two roles, `admin` and `moderator`; privileges need both rows (database check).
+
+```
+npm run roles -- grant-admin <email>    (verified account; grants admin + moderator)
+npm run roles -- revoke-admin <email>   (admin only; moderator stays)
+npm run roles -- list                   (shows each account's roles)
+```
+
+- **No manual claims (A).** When the administrator decides on another user's submitted
+  listing, the claim is taken in the same transaction as the decision (two audit rows: `claim`,
+  then the decision). An unexpired claim of another moderator is respected ("claimed"); after it
+  expires the administrator may take over. Ordinary moderators keep the 60-minute claims.
+- **Self-approval (B).** The administrator may approve their **own** submitted listing, only
+  `submitted → approved`, on the owner view (`/account/listings/view`) with a checkbox, an
+  optional note and a second confirmation; the browser must send the exact confirmation value
+  (`SELF_APPROVAL_CONFIRMATION`). The audit row has `actor_role = 'admin'`; a CHECK constraint
+  allows that role only for this transition. No notification is created (the owner is the actor).
+  Refused while another moderator holds an unexpired claim on the listing. `/moderation` lists
+  the administrator's own submitted listings in a separate box.
+- Ordinary moderators can still never decide on their own listings (application and trigger),
+  and nothing is approved or published automatically. Approved listings stay private.
+- Roles can only be granted with the local CLI; no application code writes `user_roles` (a
+  static test checks this).
+
 ## Claims (reviewer assignment, Step 1.25)
 
 | Rule                                                                        | Where enforced          |
@@ -159,3 +186,4 @@ rejected). Moderators read a listing's photos only while it is submitted.
 - Rate limits are per server process.
 - The claim length is fixed in the migration (60 minutes); there is no admin setting.
 - No restore for archived listings.
+- Several administrators are possible (each granted explicitly); the workflow is designed for one.

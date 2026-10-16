@@ -6,13 +6,14 @@ import { Suspense } from "react";
 import { DraftPreview } from "@/components/listing-draft/draft-preview";
 import { ListingReviewControls } from "@/components/review/listing-review-controls";
 import { StatusBadge } from "@/components/review/status-badge";
+import { SelfApproval } from "@/components/review/self-approval";
 import { StatusHistory } from "@/components/review/status-history";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getAuthStatus } from "@/lib/auth/instance";
 import { getExchangeRateState } from "@/lib/currency/get-exchange-rate";
 import { draftDeps } from "@/lib/drafts/instance";
 import { storedAsDraftPhotos } from "@/lib/photos/photo-types";
-import { ownerListingView } from "@/lib/review/review-service";
+import { currentUserIsAdmin, ownerListingView } from "@/lib/review/review-service";
 import { EDITABLE_STATUSES, STATUS_TEXT } from "@/lib/review/statuses";
 
 export const metadata: Metadata = {
@@ -42,6 +43,8 @@ async function OwnerListing({
   }
   const rateState = await getExchangeRateState();
   const decision = view.history.at(-1);
+  // Only an administrator may approve their own submitted listing (checked again on submit).
+  const canSelfApprove = view.status === "submitted" && (await currentUserIsAdmin(draftDeps));
   return (
     <>
       <div className={`${card} p-4 sm:p-5`}>
@@ -61,6 +64,7 @@ async function OwnerListing({
             photoCount={view.photos.length}
           />
         </div>
+        {canSelfApprove && <SelfApproval listingId={id} />}
       </div>
       <div className="mt-6">
         <DraftPreview

@@ -55,7 +55,7 @@ const EDITABLE = "l.status IN ('draft', 'changes_requested')";
 export async function setActor(
   db: SqlClient,
   actorId: string,
-  role: "owner" | "moderator",
+  role: "owner" | "moderator" | "admin",
   reason: string | null = null,
 ) {
   await db.query(

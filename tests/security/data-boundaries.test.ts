@@ -197,6 +197,11 @@ describe("data access boundaries", () => {
       // Unauthorized visitors get the ordinary 404 (no hint that the page exists).
       expect(code(page), page).toContain("notFound()");
     }
+    // Roles (moderator, admin) are granted only by the local CLI: no application code writes them.
+    for (const file of all) {
+      expect(code(file), file).not.toMatch(/(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+user_roles/i);
+    }
+    expect(source(join(root, "scripts", "roles.mts"))).toMatch(/isLocalDatabaseUrl/);
     // The notifications page is private too (signed-out visitors go to the login page).
     const notifications = join(root, "app", "account", "notifications", "page.tsx");
     expect(code(notifications)).toContain("connection()");

@@ -27,11 +27,14 @@ export function ReviewPanel({
   claim,
   nextId,
   filters,
+  admin = false,
 }: {
   listingId: string;
   claim: PanelClaim;
   nextId: string | null;
   filters: { city?: string; propertyType?: string };
+  /** Administrator: decides without a separate claim step (the server claims in one step). */
+  admin?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -86,7 +89,13 @@ export function ReviewPanel({
         <h2 id="claim-title" className="text-base font-semibold text-navy">
           განხილვის მინიჭება
         </h2>
-        {state === "free" && (
+        {state === "free" && admin && (
+          <p className="rounded-xl bg-cream px-3 py-2 text-sm text-navy ring-1 ring-line">
+            ადმინისტრატორი: ცალკე აღება საჭირო არ არის — განცხადება თქვენ მოგენიჭებათ
+            გადაწყვეტილების მომენტში. სხვა მოდერატორის აქტიურ აღებას სისტემა არ გადაფარავს.
+          </p>
+        )}
+        {state === "free" && !admin && (
           <>
             <p className="text-sm text-muted">
               {claim.state !== "free"
@@ -143,7 +152,7 @@ export function ReviewPanel({
           </p>
         )}
       </section>
-      {state === "mine" && (
+      {(state === "mine" || (state === "free" && admin)) && (
         <div className="border-t border-line pt-4">
           <ModerationDecision
             listingId={listingId}

@@ -30,6 +30,7 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `db/migrations/0004_draft_photo_uploads.sql`              | uploaded draft photos in `listing_images` (`source_kind = 'upload'`)                        |
 | `db/migrations/0005_listing_moderation.sql`               | submission/moderation statuses, roles, immutable status events (see `docs/MODERATION.md`)   |
 | `db/migrations/0006_review_assignments_notifications.sql` | claims, notifications, submission fingerprints, data-source/owner and photo guards          |
+| `db/migrations/0007_owner_administrator.sql`              | `admin` role, administrator self-approval (actor role `admin`)                              |
 | `lib/drafts/*`                                            | draft input whitelist, store (SQL), service (ownership), server wiring                      |
 | `lib/review/*`                                            | status table, submission, claims, moderation, history, change fingerprints                  |
 | `lib/notifications/*`                                     | in-app notifications of listing owners (read, mark as read)                                 |
@@ -44,7 +45,7 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `lib/repository/*`                                        | interface, memory backend, backend selection                                                |
 | `lib/data/listings.ts`                                    | server-only, cached reads for pages                                                         |
 | `scripts/db.mts`                                          | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
-| `scripts/roles.mts`                                       | `roles -- list \| grant <email> \| revoke <email>` (moderator role, local only)             |
+| `scripts/roles.mts`                                       | `roles -- list`, `grant`, `revoke`, `grant-admin`, `revoke-admin` `<email>` (local only)    |
 | `scripts/photos.mts`                                      | `photos:orphans` (unreferenced photo files; read-only unless `-- --delete`)                 |
 
 ## Accounts (Step 1.21)
@@ -142,6 +143,17 @@ row is changed). It adds:
   application in the submitting transaction.
 
 Details: `docs/MODERATION.md`.
+
+## Owner-administrator (migration 0007)
+
+`0007_owner_administrator.sql` widens `user_roles.role` to `moderator | admin` and
+`listing_status_events.actor_role` to `owner | moderator | admin`, adds the CHECK
+`admin_events_are_self_approvals` (actor role `admin` only for `submitted → approved` status
+events) and replaces the status trigger's body with one more branch: an administrator (both
+roles) may approve their own submitted listing unless another moderator holds an unexpired
+claim. Decisions on other users' listings without a manual claim need no SQL change (the
+application claims and decides in one transaction under the existing triggers). Additive; no row
+is changed. Details: `docs/MODERATION.md`.
 
 ## Schema notes
 

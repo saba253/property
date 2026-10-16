@@ -20,18 +20,27 @@ import {
   claimListing,
   decide,
   getForReview,
+  isAdmin,
   isModerator,
   listQueue,
   moderationHistory,
   nextInQueue,
+  ownSubmitted,
   ownedStatus,
   releaseClaim,
   reviewMeta,
+  selfApprove,
   statusHistory,
   submitListing,
   withdrawListing,
 } from "@/lib/review/review-store";
-import { MAX_REASON_LENGTH, type UserListingStatus } from "@/lib/review/statuses";
+import {
+  MAX_REASON_LENGTH,
+  SELF_APPROVAL_CONFIRMATION,
+  type UserListingStatus,
+} from "@/lib/review/statuses";
+
+export { SELF_APPROVAL_CONFIRMATION };
 
 /*
  * Submission and moderation for the signed-in user (no Next.js imports; tests run it on PGlite
@@ -82,6 +91,19 @@ export type ClaimOutcome =
       | "own-listing"
       | "claimed"
       | "not-claimed"
+      | "unavailable"
+    >;
+
+export type SelfApprovalOutcome =
+  | { ok: true }
+  | Failure<
+      | "unauthenticated"
+      | "forbidden"
+      | "rate-limited"
+      | "not-found"
+      | "conflict"
+      | "claimed"
+      | "confirmation-required"
       | "unavailable"
     >;
 
@@ -236,6 +258,51 @@ export async function moderate(
   return { ok: true, next };
 }
 
+/**
+ * An administrator approves their own submitted listing. Requires the explicit confirmation
+ * value; the role, ownership, status and claims are checked again in the database.
+ */
+export async function selfApproveListing(
+  deps: ReviewDeps,
+  listingId: unknown,
+  confirmation: unknown,
+  noteInput: unknown = null,
+): Promise<SelfApprovalOutcome> {
+  const userId = await deps.currentUserId();
+  if (!userId) return { ok: false, reason: "unauthenticated" };
+  if (!(deps.limiters ?? defaultLimiters).decide.check(`decide:${userId}`).allowed) {
+    return { ok: false, reason: "rate-limited" };
+  }
+  if (!isDraftId(listingId)) return { ok: false, reason: "not-found" };
+  if (confirmation !== SELF_APPROVAL_CONFIRMATION) {
+    return { ok: false, reason: "confirmation-required" };
+  }
+  const note = noteInput === null || noteInput === "" ? null : cleanReason(noteInput);
+  try {
+    const result = await deps.withConnection((db) => selfApprove(db, userId, listingId, note));
+    return result === "ok" ? { ok: true } : { ok: false, reason: result };
+  } catch (error) {
+    logFailure("self-approval", error);
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
+/** Whether the signed-in user is the (an) administrator. */
+export async function currentUserIsAdmin(deps: ReviewDeps): Promise<boolean> {
+  const userId = await deps.currentUserId();
+  if (!userId) return false;
+  return deps.withConnection((db) => isAdmin(db, userId));
+}
+
+/** The administrator's own submitted listings; null for everyone else. */
+export async function adminOwnSubmitted(deps: ReviewDeps) {
+  const userId = await deps.currentUserId();
+  if (!userId) return null;
+  return deps.withConnection(async (db) =>
+    (await isAdmin(db, userId)) ? ownSubmitted(db, userId) : null,
+  );
+}
+
 /** Whether the signed-in user is a moderator (false when signed out). */
 export async function currentUserIsModerator(deps: ReviewDeps): Promise<boolean> {
   const userId = await deps.currentUserId();
@@ -307,7 +374,12 @@ export type ListingForView = {
   history: StatusEvent[];
 };
 
-export type ListingForReview = ListingForView & { meta: ReviewMeta; next: string | null };
+export type ListingForReview = ListingForView & {
+  meta: ReviewMeta;
+  next: string | null;
+  /** The viewer is an administrator (decides without a separate claim step). */
+  admin: boolean;
+};
 
 /**
  * A submitted listing with photos, history (including claims), claim state, change summary and
@@ -330,6 +402,7 @@ export async function reviewDetails(
       history: await statusHistory(db, listingId, { assignments: true }),
       meta: await reviewMeta(db, userId, listingId),
       next: await nextInQueue(db, userId, listingId, filters),
+      admin: await isAdmin(db, userId),
     };
   });
 }

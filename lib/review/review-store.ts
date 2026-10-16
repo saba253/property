@@ -23,13 +23,19 @@ import type { UserListingStatus } from "@/lib/review/statuses";
  * Claims (0006): a moderator claims a submitted listing for CLAIM_MINUTES; only the holder of an
  * unexpired claim may decide; the holder may release it; after expiry anyone else may claim it.
  * Expiry is always compared with the database clock (clock_timestamp()), never the web server's.
+ *
+ * Owner-administrator (0007): an admin (roles 'admin' AND 'moderator') decides on other users'
+ * listings without a separate claim step: the claim is taken in the decision's transaction
+ * (still refused while another moderator holds an unexpired claim). An admin may also approve
+ * their own submitted listing through the separate self-approval (actor role 'admin').
  */
 
 export type StatusEvent = {
   kind: "status" | "claim" | "release";
   from: UserListingStatus;
   to: UserListingStatus;
-  actorRole: "owner" | "moderator";
+  /** 'admin' only for an administrator's self-approval. */
+  actorRole: "owner" | "moderator" | "admin";
   reason: string | null;
   at: string;
 };
@@ -75,6 +81,7 @@ export type DecisionResult =
 
 export type ClaimResult = "ok" | "not-found" | "conflict" | "forbidden" | "own-listing" | "claimed";
 export type ReleaseResult = "ok" | "not-found" | "forbidden" | "not-claimed";
+export type SelfApprovalResult = "ok" | "not-found" | "forbidden" | "conflict" | "claimed";
 
 const ISO = `'YYYY-MM-DD"T"HH24:MI:SS"Z"'`;
 
@@ -98,6 +105,15 @@ export async function isModerator(db: SqlClient, userId: string): Promise<boolea
     [userId],
   );
   return rows.length === 1;
+}
+
+/** Administrator: both the 'admin' and the 'moderator' role (the database checks the same). */
+export async function isAdmin(db: SqlClient, userId: string): Promise<boolean> {
+  const { rows } = await db.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM user_roles WHERE user_id = $1 AND role IN ('admin', 'moderator')",
+    [userId],
+  );
+  return rows[0].n === 2;
 }
 
 async function lockOwned(db: SqlClient, ownerId: string, listingId: string) {
@@ -287,7 +303,16 @@ export async function decide(
     if (row.status !== "submitted") return "conflict";
     const claim = claimOf(moderatorId, row.review_claimed_by, row.seconds_left);
     if (claim.state === "other") return "claimed";
-    if (claim.state !== "mine") return "not-claimed";
+    if (claim.state !== "mine") {
+      // Ordinary moderators claim first; an administrator's claim is taken here, in the same
+      // transaction (the claim trigger records it), so a single admin needs no extra step.
+      if (!(await isAdmin(db, moderatorId))) return "not-claimed";
+      await setActor(db, moderatorId, "moderator");
+      await db.query("UPDATE listings SET review_claimed_by = $2 WHERE id = $1", [
+        listingId,
+        moderatorId,
+      ]);
+    }
     await setActor(db, moderatorId, "moderator", reason);
     await db.query("UPDATE listings SET status = $2, updated_at = now() WHERE id = $1", [
       listingId,
@@ -295,6 +320,59 @@ export async function decide(
     ]);
     return "ok";
   });
+}
+
+/**
+ * An administrator approves their OWN submitted listing (explicit, separate action). Refused
+ * while another moderator holds an unexpired claim. Recorded with actor role 'admin'; no
+ * notification (the owner is the actor). Never automatic: callers require a confirmation.
+ */
+export async function selfApprove(
+  db: SqlConnection,
+  adminId: string,
+  listingId: string,
+  note: string | null,
+): Promise<SelfApprovalResult> {
+  return withTransaction(db, async () => {
+    if (!(await isAdmin(db, adminId))) return "forbidden";
+    const row = await lockForModerator(db, listingId);
+    if (!row || row.owner_user_id !== adminId) return "not-found";
+    if (row.status !== "submitted") return "conflict";
+    if (claimOf(adminId, row.review_claimed_by, row.seconds_left).state !== "free") {
+      return "claimed";
+    }
+    await setActor(db, adminId, "admin", note);
+    await db.query("UPDATE listings SET status = 'approved', updated_at = now() WHERE id = $1", [
+      listingId,
+    ]);
+    return "ok";
+  });
+}
+
+/** The administrator's own submitted listings (for self-approval), oldest first. */
+export async function ownSubmitted(
+  db: SqlClient,
+  adminId: string,
+): Promise<{ id: string; title: string; submittedAt: string; claimedByOther: boolean }[]> {
+  const { rows } = await db.query<{
+    id: string;
+    title: string;
+    submitted_at: string;
+    seconds_left: number | null;
+  }>(
+    `SELECT l.id, l.title, to_char(l.submitted_at AT TIME ZONE 'UTC', ${ISO}) AS submitted_at,
+            ${SECONDS_LEFT} AS seconds_left
+     FROM listings l
+     WHERE l.owner_user_id = $1 AND l.data_source = 'user' AND l.status = 'submitted'
+     ORDER BY l.submitted_at, l.id LIMIT 50`,
+    [adminId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    submittedAt: row.submitted_at,
+    claimedByOther: (row.seconds_left ?? 0) > 0,
+  }));
 }
 
 const QUEUE_WHERE = `l.data_source = 'user' AND l.status = 'submitted' AND l.owner_user_id <> $1
@@ -461,7 +539,7 @@ export async function statusHistory(
     kind: "status" | "claim" | "release";
     from_status: UserListingStatus;
     to_status: UserListingStatus;
-    actor_role: "owner" | "moderator";
+    actor_role: "owner" | "moderator" | "admin";
     reason: string | null;
     at: string;
   }>(
@@ -520,7 +598,7 @@ export async function moderationHistory(
     kind: "status" | "claim" | "release";
     from_status: UserListingStatus;
     to_status: UserListingStatus;
-    actor_role: "owner" | "moderator";
+    actor_role: "owner" | "moderator" | "admin";
     reason: string | null;
     at: string;
     listing_id: string;

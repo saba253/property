@@ -65,6 +65,9 @@ export const PREVIEW_LABEL: Record<UserListingStatus, string> = {
  */
 export const CLAIM_MINUTES = 60;
 
+/** The exact value the browser sends to confirm an administrator self-approval (never implied). */
+export const SELF_APPROVAL_CONFIRMATION = "self-approve-own-listing";
+
 /** Editable starting points for a moderator's reason (the text can be changed before sending). */
 export const REASON_TEMPLATES: readonly { label: string; text: string }[] = [
   { label: "ბნელი ფოტოები", text: "ფოტოები ბნელი ან ბუნდოვანია. ატვირთეთ უფრო ნათელი ფოტოები." },

@@ -23,7 +23,7 @@ import {
 import type { PropertyType, TransactionType } from "@/lib/properties/types";
 import { formatWhen } from "@/lib/review/format-time";
 import { queueQuery } from "@/lib/review/queue-query";
-import { cleanQueueFilters, moderationQueue } from "@/lib/review/review-service";
+import { adminOwnSubmitted, cleanQueueFilters, moderationQueue } from "@/lib/review/review-service";
 import { CLAIM_MINUTES } from "@/lib/review/statuses";
 
 export const metadata: Metadata = {
@@ -48,9 +48,39 @@ async function Queue({ searchParams }: Pick<PageProps<"/moderation">, "searchPar
   if (!queue) notFound();
   const pages = Math.max(1, Math.ceil(queue.total / queue.pageSize));
   const filtered = Boolean(filters.city || filters.propertyType);
+  const own = await adminOwnSubmitted(draftDeps);
 
   return (
     <>
+      {own && (
+        <p className="mt-4 rounded-xl bg-cream px-3 py-2 text-sm text-navy ring-1 ring-line">
+          ადმინისტრატორი: ცალკე აღება საჭირო არ არის — განცხადება გადაწყვეტილებისას მოგენიჭებათ
+          (სხვა მოდერატორის აქტიურ აღებას სისტემა არ გადაფარავს).
+        </p>
+      )}
+      {own && own.length > 0 && (
+        <section
+          aria-labelledby="own-heading"
+          className="mt-6 rounded-card border border-sand-200 bg-cream p-4"
+        >
+          <h2 id="own-heading" className="text-sm font-semibold text-navy">
+            თქვენი განცხადებები განხილვაზე (ადმინისტრატორის თვითდამტკიცება)
+          </h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {own.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="min-w-0 break-words text-navy">{item.title}</span>
+                <Link
+                  href={`/account/listings/view?listing=${encodeURIComponent(item.id)}`}
+                  className="inline-flex min-h-10 items-center font-semibold text-accent-700 hover:underline"
+                >
+                  {item.claimedByOther ? "მოდერატორი განიხილავს" : "გახსნა →"}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <form
         method="get"
         action="/moderation"

@@ -394,7 +394,7 @@ describe("audit history", () => {
     ).rejects.toThrow();
     await expect(db.exec("TRUNCATE listing_status_events")).rejects.toThrow();
     await expect(
-      db.query("INSERT INTO user_roles (user_id, role) VALUES ('plain', 'admin')"),
+      db.query("INSERT INTO user_roles (user_id, role) VALUES ('plain', 'superadmin')"),
     ).rejects.toThrow();
   });
 });

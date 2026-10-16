@@ -41,11 +41,13 @@ export function StatusHistory({
               <span className="text-subtle">
                 {" "}
                 ·{" "}
-                {event.actorRole === "moderator"
-                  ? "მოდერატორი"
-                  : viewer === "owner"
-                    ? "თქვენ"
-                    : "მფლობელი"}{" "}
+                {event.actorRole === "admin"
+                  ? "ადმინისტრატორი · თვითდამტკიცება"
+                  : event.actorRole === "moderator"
+                    ? "მოდერატორი"
+                    : viewer === "owner"
+                      ? "თქვენ"
+                      : "მფლობელი"}{" "}
                 · {formatWhen(event.at)}
               </span>
             </p>

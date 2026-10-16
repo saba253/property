@@ -5,10 +5,12 @@ import {
   type ClaimOutcome,
   type DecisionKind,
   type DecisionOutcome,
+  type SelfApprovalOutcome,
   claimForReview,
   cleanQueueFilters,
   moderate,
   releaseReview,
+  selfApproveListing,
 } from "@/lib/review/review-service";
 
 /*
@@ -40,4 +42,16 @@ export async function claimAction(listingId: unknown): Promise<ClaimOutcome> {
 
 export async function releaseAction(listingId: unknown): Promise<ClaimOutcome> {
   return releaseReview(draftDeps, listingId);
+}
+
+/**
+ * Administrator self-approval of their own submitted listing. Needs the explicit confirmation
+ * value; the administrator role and ownership come from the session and the database only.
+ */
+export async function selfApproveAction(
+  listingId: unknown,
+  confirmation: unknown,
+  note: unknown,
+): Promise<SelfApprovalOutcome> {
+  return selfApproveListing(draftDeps, listingId, confirmation, note);
 }

@@ -68,6 +68,7 @@ async function Review({ searchParams }: Pick<PageProps<"/moderation/review">, "s
             claim={meta.claim}
             nextId={details.next}
             filters={filters}
+            admin={details.admin}
           />
         </aside>
       </div>

@@ -121,11 +121,13 @@ async function History({ searchParams }: Pick<PageProps<"/moderation/history">, 
                   )}
                 </p>
                 <p className="text-xs text-subtle">
-                  {entry.byMe
-                    ? "თქვენ"
-                    : entry.actorRole === "moderator"
-                      ? "მოდერატორი"
-                      : "მფლობელი"}{" "}
+                  {entry.actorRole === "admin"
+                    ? `${entry.byMe ? "თქვენ" : "ადმინისტრატორი"} · თვითდამტკიცება`
+                    : entry.byMe
+                      ? "თქვენ"
+                      : entry.actorRole === "moderator"
+                        ? "მოდერატორი"
+                        : "მფლობელი"}{" "}
                   · {formatWhen(entry.at)}
                 </p>
               </div>
