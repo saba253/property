@@ -36,6 +36,15 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `lib/data/listings.ts`                  | server-only, cached reads for pages                                                         |
 | `scripts/db.mts`                        | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
 
+## Accounts (Step 1.21)
+
+`db/migrations/0002_auth_accounts.sql` adds Better Auth's tables (`users`, `sessions`,
+`accounts`, `verifications`, `rate_limits`). Their columns keep Better Auth's camelCase names,
+quoted. It also adds `listings.owner_user_id`, the future owner. The column is nullable, is
+required to be NULL for demo listings, and blocks deleting a user who owns listings.
+`tests/lib/auth/schema-and-limits.test.ts` checks with Better Auth itself that the schema is
+complete. See `docs/AUTH.md`.
+
 ## Schema notes
 
 - **Property vs listing.** Physical facts live on `properties`; the offer (transaction, asking

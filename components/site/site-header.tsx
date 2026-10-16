@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HeaderAccount } from "@/components/auth/header-account";
 import { HeaderCompareLink } from "@/components/compare/header-compare-link";
 import { HeaderFavoritesLink } from "@/components/favorites/header-favorites-link";
 import { HeaderMenu, type HeaderMenuItem } from "@/components/site/header-menu";
@@ -15,7 +16,8 @@ const MENU_ITEMS: readonly HeaderMenuItem[] = [
 
 /**
  * One line at every width: search link, favorites and comparison (icons with counts; text from
- * `xl`), "add listing" from `lg`, and a compact menu with every section.
+ * `xl`), "add listing" from `lg`, and a compact menu with every section; the account entry
+ * ("შესვლა", or "ჩემი ანგარიში" and "გამოსვლა") is the first item of that menu.
  */
 export function SiteHeader() {
   return (
@@ -43,7 +45,7 @@ export function SiteHeader() {
             </svg>
             განცხადების დამატება
           </Link>
-          <HeaderMenu items={MENU_ITEMS} />
+          <HeaderMenu items={MENU_ITEMS} account={<HeaderAccount />} />
         </nav>
       </div>
     </header>

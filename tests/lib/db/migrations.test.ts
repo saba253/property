@@ -19,7 +19,10 @@ afterEach(async () => {
 describe("migration files", () => {
   it("are versioned, ordered and checksummed the same on Windows and Linux", () => {
     const migrations = loadMigrations();
-    expect(migrations[0]).toMatchObject({ version: "0001", name: "initial_schema" });
+    expect(migrations.map((m) => `${m.version}_${m.name}`)).toEqual([
+      "0001_initial_schema",
+      "0002_auth_accounts",
+    ]);
     expect(migrationChecksum("a\r\nb")).toBe(migrationChecksum("a\nb"));
     expect(() => parseMigrations([{ file: "1_bad.sql", sql: "" }])).toThrow("Unexpected");
     expect(() =>
@@ -42,11 +45,14 @@ describe("running migrations", () => {
   it("applies pending migrations once and records them", async () => {
     db = await createTestDatabase({ migrate: false });
     const migrations = loadMigrations();
-    expect(await runMigrations(db, migrations)).toEqual(["0001"]);
+    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002"]);
     expect(await runMigrations(db, migrations)).toEqual([]);
     const status = await getMigrationStatus(db, migrations);
     expect(status.pending).toEqual([]);
-    expect(status.applied).toEqual([{ version: "0001", name: "initial_schema" }]);
+    expect(status.applied).toEqual([
+      { version: "0001", name: "initial_schema" },
+      { version: "0002", name: "auth_accounts" },
+    ]);
     const { rows } = await db.query<{ count: number }>("SELECT count(*)::int AS count FROM cities");
     expect(rows[0].count).toBe(2);
   });
@@ -61,11 +67,11 @@ describe("running migrations", () => {
     db = await createTestDatabase();
     const broken = parseMigrations([
       ...loadMigrations().map((m) => ({ file: `${m.version}_${m.name}.sql`, sql: m.sql })),
-      { file: "0002_broken.sql", sql: "CREATE TABLE half_done (id int); SELECT 1/0;" },
+      { file: "0003_broken.sql", sql: "CREATE TABLE half_done (id int); SELECT 1/0;" },
     ]);
     await expect(runMigrations(db, broken)).rejects.toThrow();
     const { rows } = await db.query("SELECT to_regclass('half_done') AS t");
     expect(rows[0]).toEqual({ t: null });
-    expect((await getMigrationStatus(db, broken)).pending.map((m) => m.version)).toEqual(["0002"]);
+    expect((await getMigrationStatus(db, broken)).pending.map((m) => m.version)).toEqual(["0003"]);
   });
 });

@@ -17,6 +17,11 @@ function files(dir: string): string[] {
 }
 
 const source = (path: string) => readFileSync(path, "utf8");
+/** Source without comments, for checks about what the code does (not what comments say). */
+const code = (path: string) =>
+  source(path)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
 const all = ["app", "components", "lib"].flatMap((dir) => files(join(root, dir)));
 const isClient = (path: string) => /^\s*["']use client["']/.test(source(path));
 
@@ -40,6 +45,38 @@ describe("data access boundaries", () => {
     expect(route).toContain('from "@/lib/data/listings"');
     expect(route).not.toMatch(/from "(pg|@\/lib\/db\/[^"]+)"/);
     expect(route).not.toMatch(/export (async )?function (PUT|PATCH|DELETE)/);
+  });
+
+  it("keeps authentication secrets and the auth server on the server", () => {
+    for (const file of all.filter(isClient)) {
+      const text = source(file);
+      expect(text, file).not.toMatch(/from "@\/lib\/auth\/(server|instance|email|config)"/);
+      expect(text, file).not.toMatch(/BETTER_AUTH_SECRET|GOOGLE_CLIENT_SECRET|AUTH_SMTP_URL/);
+    }
+    expect(source(join(root, "lib", "auth", "instance.ts"))).toMatch(/^import "server-only";/);
+  });
+
+  it("never keeps sessions, tokens or passwords in browser storage, and leaves selections alone", () => {
+    for (const file of files(join(root, "components", "auth"))) {
+      const text = code(file);
+      expect(text, file).not.toMatch(/localStorage|sessionStorage|document\.cookie/);
+    }
+  });
+
+  it("never caches or prerenders account data", () => {
+    for (const page of ["account", "login", "register", "forgot-password", "reset-password"]) {
+      const text = source(join(root, "app", page, "page.tsx"));
+      expect(code(join(root, "app", page, "page.tsx")), page).not.toContain('"use cache"');
+      expect(text, page).toContain("connection()");
+      expect(text, page).toMatch(/robots: \{ index: false, follow: false \}/);
+    }
+    const status = source(join(root, "app", "api", "account", "status", "route.ts"));
+    expect(status).toContain("private, no-store");
+    // A GET route without request-time APIs would be prerendered once and shared by everyone.
+    expect(code(join(root, "app", "api", "account", "status", "route.ts"))).toContain(
+      "await connection()",
+    );
+    expect(status).not.toContain("session.token");
   });
 
   it("marks the page data module as server-only", () => {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 import { useDismissableDetails } from "@/components/ui/use-dismissable-details";
 
 export type HeaderMenuItem = { href: string; label: string; description?: string };
@@ -12,7 +12,14 @@ export type HeaderMenuItem = { href: string; label: string; description?: string
  * at 375px while every section stays reachable. Escape, a click outside or following a link
  * closes it.
  */
-export function HeaderMenu({ items }: { items: readonly HeaderMenuItem[] }) {
+export function HeaderMenu({
+  items,
+  account,
+}: {
+  items: readonly HeaderMenuItem[];
+  /** Account entry shown first (sign-in, or the account links). */
+  account?: ReactNode;
+}) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
   useDismissableDetails(detailsRef);
@@ -27,6 +34,7 @@ export function HeaderMenu({ items }: { items: readonly HeaderMenuItem[] }) {
         <span className="sr-only sm:not-sr-only">მენიუ</span>
       </summary>
       <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-2 shadow-card-hover">
+        {account && <div className="mb-1 border-b border-line pb-1">{account}</div>}
         <ul aria-label="ნავიგაცია">
           {items.map((item) => (
             <li key={item.href}>
