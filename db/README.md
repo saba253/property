@@ -27,7 +27,9 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `db/migrations/0001_initial_schema.sql`      | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
 | `db/migrations/0002_auth_accounts.sql`       | Better Auth tables, `listings.owner_user_id`                                                |
 | `db/migrations/0003_user_listing_drafts.sql` | private drafts of signed-in users (`data_source = 'user'`)                                  |
+| `db/migrations/0004_draft_photo_uploads.sql` | uploaded draft photos in `listing_images` (`source_kind = 'upload'`)                        |
 | `lib/drafts/*`                               | draft input whitelist, store (SQL), service (ownership), server wiring                      |
+| `lib/photos/*`                               | photo processing, storage adapter, SQL, service, routes' helpers (see `docs/STORAGE.md`)    |
 | `lib/db/config.ts`                           | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
 | `lib/db/migrations.ts`                       | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
 | `lib/db/listing-query.ts`                    | SQL for the validated search (filters, budget, sort)                                        |
@@ -38,6 +40,7 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `lib/repository/*`                           | interface, memory backend, backend selection                                                |
 | `lib/data/listings.ts`                       | server-only, cached reads for pages                                                         |
 | `scripts/db.mts`                             | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
+| `scripts/photos.mts`                         | `photos:orphans` (unreferenced photo files; read-only unless `-- --delete`)                 |
 
 ## Accounts (Step 1.21)
 
@@ -70,7 +73,30 @@ never appear in search, counts, facets, the map, batch lookups or comparables (t
 with parameterized SQL; updates lock the row with `SELECT … FOR UPDATE` scoped to the owner.
 `draft-service.ts` takes the owner only from the verified session; a request cannot name an
 owner, status, id or data source. At most 50 drafts per user; 30 saves per 10 minutes per user
-(per process). Photos are not stored.
+(per process). Photos: see the next section.
+
+## Draft photos (Step 1.23)
+
+`0004_draft_photo_uploads.sql` extends `listing_images` instead of adding a parallel table (one
+gallery model for every listing; a future publish keeps the same rows):
+
+- `source_kind` gains `'upload'`; new columns `storage_key` (unique, `^[0-9a-f]{32}\.webp$`),
+  `mime_type` (`image/webp` only), `byte_size` (1 B–10 MB) and `created_at`.
+- `alt` becomes optional for uploads only (NOT NULL relaxed; demo images still need it).
+- `image_source_consistent` now also requires every upload column for uploads and none for the
+  other kinds (uploads never have a `src` URL or a scene).
+- Trigger `listing_images_check_owner`: uploads only on user listings, user listings only
+  uploads, and at most 10 uploads per listing (also enforced by the application under
+  `SELECT … FOR UPDATE` on the draft row).
+- Existing: `UNIQUE (listing_id, sort_order)` and one cover per listing
+  (`listing_images_one_cover`); reordering writes in two steps inside one transaction.
+
+`lib/photos/photo-store.ts` scopes every statement to the owner's draft (`owner_user_id`,
+`data_source = 'user'`, `status = 'draft'`). Public image reads in `postgres-repository.ts` join
+the listing and accept only public listings and non-upload images. Files, processing, privacy,
+backup and the orphan check are described in `docs/STORAGE.md`. The migration only replaces CHECK
+constraints and relaxes one NOT NULL; the test in `tests/lib/db/migrations.test.ts` allows exactly
+these two non-destructive patterns.
 
 ## Schema notes
 

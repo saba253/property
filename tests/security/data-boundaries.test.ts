@@ -128,6 +128,48 @@ describe("data access boundaries", () => {
     }
   });
 
+  it("keeps draft photo processing, storage and SQL on the server and the routes guarded", () => {
+    for (const file of all.filter(isClient)) {
+      expect(source(file), file).not.toMatch(
+        /from "@\/lib\/photos\/(process-image|storage|photo-store|photo-service|instance|http)"/,
+      );
+      expect(source(file), file).not.toMatch(/from "sharp"/);
+    }
+    expect(source(join(root, "lib", "photos", "instance.ts"))).toMatch(/^import "server-only";/);
+    const routes = [
+      join(root, "app", "api", "drafts", "[draftId]", "photos", "route.ts"),
+      join(root, "app", "api", "drafts", "[draftId]", "photos", "[photoId]", "route.ts"),
+    ];
+    for (const route of routes) {
+      const text = code(route);
+      expect(text, route).toContain("await connection()");
+      // Never cached: directly, or through privateJson (lib/photos/http.ts).
+      expect(text, route).toMatch(/private, no-store|privateJson\(/);
+      // Every write checks this site's Origin (CSRF) before doing anything.
+      for (const method of ["POST", "PATCH", "DELETE"]) {
+        const handler = text.split(`export async function ${method}(`)[1]?.split("export ")[0];
+        if (handler) expect(handler, `${route} ${method}`).toContain("isSameOrigin(request");
+      }
+      // A browser-supplied file name or form data is never used.
+      expect(text, route).not.toMatch(/formData\(|\.name\b|filename=\$\{/);
+    }
+    // Uploaded files live outside public/ and are not committed.
+    expect(source(join(root, "lib", "photos", "storage.ts"))).toContain(
+      'path.join(".data", "uploads")',
+    );
+    expect(source(join(root, ".gitignore"))).toMatch(/^\/\.data\/$/m);
+    for (const file of files(join(root, "lib", "photos"))) {
+      const sqlLines = source(file)
+        .split("\n")
+        .filter((l) => /\b(SELECT|INSERT|UPDATE|DELETE|WHERE|VALUES|SET)\b/.test(l));
+      for (const line of sqlLines) {
+        expect(line, file).not.toMatch(
+          /\$\{(input|change|file|ownerId|userId|listingId|photoId|draftId|id|key|text)[.}]/,
+        );
+      }
+    }
+  });
+
   it("marks the page data module as server-only", () => {
     expect(source(join(root, "lib", "data", "listings.ts"))).toMatch(/^import "server-only";/);
   });

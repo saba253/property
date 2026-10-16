@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "db:status": "node --import ./scripts/register-aliases.mjs scripts/db.mts status",
     "db:migrate": "node --import ./scripts/register-aliases.mjs scripts/db.mts migrate",
-    "db:seed:demo": "node --import ./scripts/register-aliases.mjs scripts/db.mts seed-demo"
+    "db:seed:demo": "node --import ./scripts/register-aliases.mjs scripts/db.mts seed-demo",
+    "photos:orphans": "node --import ./scripts/register-aliases.mjs scripts/photos.mts"
   },
   "dependencies": {
     "better-auth": "1.7.6",
@@ -24,7 +25,8 @@
     "nodemailer": "10.0.13",
     "pg": "8.23.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",

@@ -10,7 +10,15 @@ import { loadMigrations, runMigrations } from "@/lib/db/migrations";
 import { seedDemoData } from "@/lib/db/seed-demo";
 import type { SqlConnection } from "@/lib/db/sql-client";
 import { getDraftForUser, listDraftsForUser, saveDraftForUser } from "@/lib/drafts/draft-service";
+import { createRateLimiter } from "@/lib/api/rate-limit";
+import {
+  type PhotoDeps,
+  listDraftPhotos,
+  readDraftPhoto,
+  uploadDraftPhoto,
+} from "@/lib/photos/photo-service";
 import { addUser, depsFor, sampleDraft } from "../lib/drafts/draft-fixtures";
+import { jpeg, tempStorage } from "../lib/photos/photo-fixtures";
 
 /*
  * OPT-IN integration tests against a real PostgreSQL SERVER through the `pg` driver (not PGlite).
@@ -139,5 +147,65 @@ run("real PostgreSQL server", () => {
       sort: "default",
     });
     expect(search.items.every((item) => item.listing.dataSource === "demo")).toBe(true);
+  });
+
+  it("enforces the 10-photo limit under truly concurrent uploads (pg pool)", async () => {
+    const owner = `real-photo-${runId}`;
+    const other = `real-photo-other-${runId}`;
+    await addUser(db, owner);
+    await addUser(db, other);
+    const saved = await saveDraftForUser(depsFor(db, owner), sampleDraft(), null);
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const temp = await tempStorage();
+    try {
+      const limits = () => ({
+        upload: createRateLimiter({ limit: 1000, windowMs: 60_000 }),
+        change: createRateLimiter({ limit: 1000, windowMs: 60_000 }),
+      });
+      // Separate pool connections per operation: real parallel transactions on the server.
+      const withPool: PhotoDeps["withConnection"] = async (work) => {
+        const client = await pool.connect();
+        try {
+          return await work({
+            singleConnection: true,
+            query: async (text, params = []) => ({
+              rows: (await client.query(text, [...params])).rows,
+            }),
+            exec: async (text) => {
+              await client.query(text);
+            },
+          });
+        } finally {
+          client.release();
+        }
+      };
+      const deps: PhotoDeps = {
+        currentUserId: async () => owner,
+        withConnection: withPool,
+        storage: temp.storage,
+        limiters: limits(),
+      };
+      const bytes = await jpeg(24, 24);
+      const results = await Promise.all(
+        Array.from({ length: 14 }, () => uploadDraftPhoto(deps, saved.id, bytes)),
+      );
+      expect(results.filter((r) => r.ok).length).toBe(10);
+      expect(results.filter((r) => !r.ok && r.reason === "limit").length).toBe(4);
+      const photos = await listDraftPhotos(deps, saved.id);
+      expect(photos?.map((p) => p.order)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(photos?.filter((p) => p.isCover).length).toBe(1);
+      const { readdir } = await import("node:fs/promises");
+      const files = (await readdir(temp.root, { recursive: true, withFileTypes: true })).filter(
+        (e) => e.isFile(),
+      );
+      expect(files.length).toBe(10);
+      // Another user cannot read one of them.
+      const otherDeps: PhotoDeps = { ...deps, currentUserId: async () => other };
+      expect(await readDraftPhoto(otherDeps, saved.id, photos![0].id)).toBeNull();
+      expect((await readDraftPhoto(deps, saved.id, photos![0].id))?.mimeType).toBe("image/webp");
+    } finally {
+      await temp.cleanup();
+    }
   });
 });

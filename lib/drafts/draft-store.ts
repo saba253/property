@@ -28,6 +28,9 @@ export type DraftSummary = {
   currency: Currency;
   /** When the draft was last saved (recorded by the database). */
   updatedAt: string;
+  /** Number of uploaded photos and the cover's id (null without photos). */
+  photoCount: number;
+  coverPhotoId: string | null;
 };
 
 /** Upper bound of drafts per user; a sensible limit for one person's private drafts. */
@@ -206,10 +209,16 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
     amount: string;
     currency: Currency;
     updated_at: string;
+    photo_count: number;
+    cover_photo_id: string | null;
   }>(
     `SELECT l.id, l.title, l.transaction_type, p.type AS property_type, c.name AS city, p.district,
             l.asking_amount::text AS amount, l.asking_currency AS currency,
-            to_char(l.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
+            to_char(l.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
+            (SELECT count(*)::int FROM listing_images i
+              WHERE i.listing_id = l.id AND i.source_kind = 'upload') AS photo_count,
+            (SELECT i.id FROM listing_images i
+              WHERE i.listing_id = l.id AND i.source_kind = 'upload' AND i.is_cover) AS cover_photo_id
      ${LISTING_FROM}
      WHERE ${OWNED} AND l.status = 'draft'
      ORDER BY l.updated_at DESC, l.id
@@ -226,6 +235,8 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
     amount: Number(row.amount),
     currency: row.currency,
     updatedAt: row.updated_at,
+    photoCount: row.photo_count,
+    coverPhotoId: row.cover_photo_id,
   }));
 }
 

@@ -1,6 +1,9 @@
 "use client";
 
 import { type FormEvent, useEffect, useReducer, useRef, useState } from "react";
+import { saveDraftAction } from "@/app/account/listings/actions";
+import { useAccountStatus } from "@/components/auth/use-account-status";
+import { DraftPhotoManager } from "@/components/listing-draft/draft-photo-manager";
 import { DraftPreview } from "@/components/listing-draft/draft-preview";
 import { DRAFT_RESUME_KEY, DraftSavePanel } from "@/components/listing-draft/draft-save-panel";
 import { fieldId } from "@/components/listing-draft/draft-fields";
@@ -31,6 +34,7 @@ import {
   draftReducer,
 } from "@/lib/listing-draft/draft-state";
 import { parseDraftInput } from "@/lib/drafts/draft-input";
+import type { PhotoView } from "@/lib/photos/photo-types";
 import { assertNever } from "@/lib/properties/listing-types";
 import type { DistrictOption } from "@/lib/properties/cities";
 
@@ -42,7 +46,24 @@ type ListingDraftWizardProps = {
   initialDraft?: ListingDraft;
   /** Its id; null for a new draft. */
   draftId?: string | null;
+  /** The draft's stored photos (owner-only), when editing a saved draft. */
+  initialPhotos?: PhotoView[];
 };
+
+/** Stored photos in the preview's shape: the cover first, then the chosen order. */
+function storedAsDraftPhotos(photos: readonly PhotoView[]): DraftPhoto[] {
+  const ordered = [...photos].sort(
+    (a, b) => Number(b.isCover) - Number(a.isCover) || a.order - b.order,
+  );
+  return ordered.map((photo) => ({
+    id: photo.id,
+    url: photo.url,
+    fileName: "",
+    sizeBytes: photo.byteSize,
+    mimeType: "image/webp",
+    alt: photo.alt,
+  }));
+}
 
 /** The draft without photos, to compare with the last saved version. */
 const snapshot = (draft: ListingDraft) => JSON.stringify({ ...draft, photos: [] });
@@ -75,15 +96,17 @@ function CheckIcon() {
 }
 
 /**
- * Guided, multi-step listing draft form with a final preview. All state lives in this
- * component (useReducer with the pure draftReducer): nothing is sent to a server or saved, and
- * photos are shown from local object URLs that are released when no longer needed.
+ * Guided, multi-step listing draft form with a final preview. Form state lives in this component
+ * (useReducer with the pure draftReducer) until a signed-in user saves it as a private draft.
+ * Signed-in users store photos with the saved draft (DraftPhotoManager); visitors get local
+ * previews from object URLs that are released when no longer needed and never uploaded.
  */
 export function ListingDraftWizard({
   rateState,
   districts,
   initialDraft,
   draftId: initialDraftId = null,
+  initialPhotos = [],
 }: ListingDraftWizardProps) {
   const [state, dispatch] = useReducer(draftReducer, initialDraft, (draft) =>
     draft
@@ -95,6 +118,14 @@ export function ListingDraftWizard({
     initialDraft ? snapshot({ ...initialDraft, photos: [] }) : null,
   );
   const [rejections, setRejections] = useState<PhotoRejection[]>([]);
+  // Photos stored with the saved draft (signed-in users); local previews stay in state.draft.photos.
+  const [storedPhotos, setStoredPhotos] = useState<PhotoView[]>(initialPhotos);
+  const [savingForPhotos, setSavingForPhotos] = useState(false);
+  const [saveForPhotosError, setSaveForPhotosError] = useState<string | null>(null);
+  const account = useAccountStatus();
+  // A stored draft is opened only by its signed-in owner (checked on the server), so its photos
+  // show immediately; for new drafts the account status decides once it is known.
+  const storesPhotos = account ? account.enabled && account.signedIn : Boolean(initialDraft);
   const [submitAttempt, setSubmitAttempt] = useState(0);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -200,6 +231,28 @@ export function ListingDraftWizard({
     dispatch({ type: "remove-photo", id });
   }
 
+  // Photos need a stored draft to belong to: save first (the steps before are already valid),
+  // then upload. The address becomes the draft's edit page, so a refresh reopens it with photos.
+  async function saveForPhotos() {
+    setSavingForPhotos(true);
+    setSaveForPhotosError(null);
+    const result = await saveDraftAction({ ...state.draft, photos: [] }, draftId).catch(() => null);
+    setSavingForPhotos(false);
+    if (result?.ok) {
+      setDraftId(result.id);
+      setSavedSnapshot(snapshot(state.draft));
+      window.history.replaceState(null, "", `/account/listings/edit?draft=${result.id}`);
+    } else {
+      setSaveForPhotosError(
+        result?.reason === "unauthenticated"
+          ? "სესია დასრულდა. შედით ანგარიშში და სცადეთ თავიდან."
+          : result?.reason === "limit"
+            ? "დრაფტების მაქსიმალურ რაოდენობას მიაღწიეთ."
+            : "დრაფტი ვერ შეინახა. სცადეთ ცოტა ხანში.",
+      );
+    }
+  }
+
   function resetDraft() {
     for (const photo of state.draft.photos) URL.revokeObjectURL(photo.url);
     dispatch({ type: "reset" });
@@ -228,6 +281,43 @@ export function ListingDraftWizard({
       case "price":
         return <PriceStep {...props} rateState={rateState} />;
       case "photos":
+        if (account === null && !initialDraft) {
+          return <p className="text-sm text-muted">იტვირთება…</p>;
+        }
+        if (storesPhotos && draftId) {
+          return (
+            <DraftPhotoManager draftId={draftId} photos={storedPhotos} onChange={setStoredPhotos} />
+          );
+        }
+        if (storesPhotos) {
+          return (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-line bg-cream px-4 py-4 text-sm leading-6 text-navy">
+                <p className="font-semibold">ფოტოების ასატვირთად ჯერ დრაფტი შეინახეთ.</p>
+                <p className="mt-1 text-muted">
+                  ფოტოები ინახება შენახულ პირად დრაფტთან ერთად. დანარჩენი მონაცემების შეცვლა
+                  შემდეგაც შეგიძლიათ. ეს ნაბიჯი არასავალდებულოა.
+                </p>
+              </div>
+              {saveForPhotosError && (
+                <p
+                  role="alert"
+                  className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200"
+                >
+                  {saveForPhotosError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={saveForPhotos}
+                disabled={savingForPhotos}
+                className={`${buttonPrimary} disabled:opacity-60`}
+              >
+                {savingForPhotos ? "ინახება…" : "დრაფტის შენახვა და ფოტოების დამატება"}
+              </button>
+            </div>
+          );
+        }
         return (
           <PhotosStep
             {...props}
@@ -238,7 +328,12 @@ export function ListingDraftWizard({
         );
       case "review":
         return preview ? (
-          <DraftPreview item={preview} photos={state.draft.photos} rateState={rateState} />
+          <DraftPreview
+            item={preview}
+            photos={storesPhotos ? storedAsDraftPhotos(storedPhotos) : state.draft.photos}
+            rateState={rateState}
+            storedPhotos={storesPhotos}
+          />
         ) : (
           <p className="text-muted">დრაფტში შეცდომებია. დაბრუნდით წინა ნაბიჯებზე.</p>
         );
@@ -380,7 +475,11 @@ export function ListingDraftWizard({
               aria-label="დრაფტის გასუფთავება"
               className="flex flex-wrap items-center gap-2"
             >
-              <span className="text-sm text-muted">ყველა მონაცემი და ფოტო წაიშლება.</span>
+              <span className="text-sm text-muted">
+                {draftId
+                  ? "ფორმის ველები გასუფთავდება. შენახული დრაფტი და მისი ფოტოები არ წაიშლება."
+                  : "ყველა მონაცემი და ფოტო წაიშლება."}
+              </span>
               <button
                 type="button"
                 onClick={resetDraft}

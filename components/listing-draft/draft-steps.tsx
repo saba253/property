@@ -409,8 +409,8 @@ export function PhotosStep({ state, dispatch, onAddFiles, onRemove, rejections }
         role="note"
         className="rounded-2xl border border-line bg-cream px-4 py-3 text-sm leading-6 text-navy"
       >
-        ფოტოები მხოლოდ თქვენს ბრაუზერში ჩანს, გადახედვისთვის. ისინი სერვერზე არ იტვირთება და არსად
-        ინახება. ეს ნაბიჯი არასავალდებულოა.
+        ფოტოები მხოლოდ თქვენს ბრაუზერში ჩანს, გადახედვისთვის, და არსად იტვირთება. ფოტოების შესანახად
+        შედით ანგარიშში და შეინახეთ დრაფტი. ეს ნაბიჯი არასავალდებულოა.
       </div>
 
       <label

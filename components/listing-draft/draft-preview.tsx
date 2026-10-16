@@ -26,11 +26,15 @@ import type { Currency } from "@/lib/properties/types";
 
 /** Corner label on draft photos in the gallery and photo viewer. */
 export const LOCAL_PREVIEW_LABEL = "ლოკალური გადახედვა · არ არის ატვირთული";
+/** Corner label on photos stored with a private draft. */
+export const PRIVATE_PHOTO_LABEL = "პირადი ფოტო · არ არის გამოქვეყნებული";
 
 type DraftPreviewProps = {
   item: ListingWithProperty;
   photos: readonly DraftPhoto[];
   rateState: ExchangeRateState;
+  /** True when the photos are stored with the saved draft (not local previews). */
+  storedPhotos?: boolean;
 };
 
 /**
@@ -38,7 +42,7 @@ type DraftPreviewProps = {
  * the same components (gallery, facts, amenities, price per m²). It is clearly labelled as a
  * draft and offers no way to publish.
  */
-export function DraftPreview({ item, photos, rateState }: DraftPreviewProps) {
+export function DraftPreview({ item, photos, rateState, storedPhotos = false }: DraftPreviewProps) {
   const [display, setDisplay] = useState<Currency>(DEFAULT_DISPLAY_CURRENCY);
   const { listing, property } = item;
   const price = getListingDisplayPrice(item, display, rateState);
@@ -53,7 +57,7 @@ export function DraftPreview({ item, photos, rateState }: DraftPreviewProps) {
       <ListingGallery
         images={draftPhotosToImages(photos)}
         title={listing.title}
-        photoLabel={LOCAL_PREVIEW_LABEL}
+        photoLabel={storedPhotos ? PRIVATE_PHOTO_LABEL : LOCAL_PREVIEW_LABEL}
       />
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">

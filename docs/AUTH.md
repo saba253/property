@@ -161,8 +161,10 @@ server after changing `.env.local`. A local production build (`next start`) also
 - Writes are Server Actions (Next.js checks their origin). The owner comes only from the
   session; ids, status and data source in a request are ignored. Another user's draft id gives the
   same 404 as a missing one. Pages are per request, never cached, `noindex`.
-- Photos are not saved (the form says so). Publishing does not exist yet: the database forbids a
-  user listing in any status other than draft or archived.
+- Photos (Step 1.23): signed-in owners upload up to 10 photos per saved draft; they are
+  re-encoded without metadata, stored privately and served only to the owner. Details:
+  `docs/STORAGE.md`. Publishing does not exist yet: the database forbids a user listing in any
+  status other than draft or archived.
 
 ## Rotating local secrets (done 2026-10-16)
 

@@ -38,6 +38,17 @@ export type PostgresRepositoryOptions = {
   onError?: (error: unknown) => void;
 };
 
+/*
+ * Public image reads: only images of public listings (status and data source like every public
+ * query) and never uploaded draft photos (source_kind 'upload', migration 0004). This holds even
+ * if a caller passes the id of a private draft.
+ */
+const IMAGE_COLUMNS =
+  "i.id, i.listing_id, i.sort_order, i.is_cover, i.alt, i.caption, i.source_kind, i.scene, i.src, i.width, i.height";
+const PUBLIC_IMAGES = `FROM listing_images i JOIN listings l ON l.id = i.listing_id
+  WHERE i.source_kind IN ('illustration', 'photo') AND l.status = ANY($1::text[])
+    AND l.data_source = ANY($2::text[])`;
+
 /**
  * ListingRepository in PostgreSQL. Filtering, sorting, counting and paging happen in the
  * database; only the requested page is loaded. Comparables are pre-selected in SQL and the final
@@ -239,16 +250,17 @@ export function createPostgresRepository(
 
     async getListingImages(listingId) {
       const rows = await query<ImageRow>(
-        "SELECT * FROM listing_images WHERE listing_id = $1 ORDER BY sort_order, id",
-        [listingId],
+        `SELECT ${IMAGE_COLUMNS} ${PUBLIC_IMAGES} AND i.listing_id = $3 ORDER BY i.sort_order, i.id`,
+        [PUBLIC_LISTING_STATUSES, dataSources, listingId],
       );
       return getGalleryOrder(rows.map(mapImageRow));
     },
 
     async getListingCovers(listingIds) {
       const rows = await query<ImageRow>(
-        "SELECT * FROM listing_images WHERE listing_id = ANY($1::text[]) ORDER BY sort_order, id",
-        [normalizeBatchIds(listingIds)],
+        `SELECT ${IMAGE_COLUMNS} ${PUBLIC_IMAGES} AND i.listing_id = ANY($3::text[])
+         ORDER BY i.sort_order, i.id`,
+        [PUBLIC_LISTING_STATUSES, dataSources, normalizeBatchIds(listingIds)],
       );
       const covers: Record<string, ListingCover> = {};
       for (const id of listingIds) {

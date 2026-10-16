@@ -42,12 +42,7 @@ export function DraftSavePanel({
   const status = useAccountStatus();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasPhotos = draft.photos.length > 0;
-  const photoNote = hasPhotos && (
-    <p className="text-sm text-amber-900">
-      ფოტოები ჯერ არ ინახება: ისინი მხოლოდ ამ გვერდზე ჩანს. ატვირთვა მომდევნო ეტაპზე დაემატება.
-    </p>
-  );
+  const hasLocalPhotos = draft.photos.length > 0;
 
   if (!status?.enabled || !status.signedIn) {
     return (
@@ -56,6 +51,12 @@ export function DraftSavePanel({
           გამოქვეყნება ამ ეტაპზე შეუძლებელია. ეს დრაფტი მხოლოდ ამ გვერდზეა — გვერდის განახლების ან
           დახურვის შემდეგ ის დაიკარგება.
         </p>
+        {status?.enabled && !status.signedIn && hasLocalPhotos && (
+          <p className="text-amber-900">
+            არჩეული ფოტოები მხოლოდ ამ გვერდზე ჩანს. შესვლის და დრაფტის შენახვის შემდეგ ფოტოები
+            ხელახლა უნდა აირჩიოთ — ისინი შენახულ დრაფტთან ერთად დაიტვირთება.
+          </p>
+        )}
         {status?.enabled && !status.signedIn && (
           <button
             type="button"
@@ -92,7 +93,6 @@ export function DraftSavePanel({
         დრაფტი პირადია: მას მხოლოდ თქვენ ხედავთ და ის არ ქვეყნდება. გამოქვეყნება მოგვიანებით
         დაემატება.
       </p>
-      {photoNote}
       {error && (
         <p
           role="alert"

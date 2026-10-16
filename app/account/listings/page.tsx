@@ -9,6 +9,7 @@ import { buttonPrimary, card, pageContainer } from "@/components/ui/styles";
 import { getAuthStatus } from "@/lib/auth/instance";
 import { listDraftsForUser } from "@/lib/drafts/draft-service";
 import { draftDeps } from "@/lib/drafts/instance";
+import { photoUrl } from "@/lib/photos/photo-types";
 import { formatMoney } from "@/lib/pricing/format-money";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
 
@@ -61,24 +62,43 @@ async function Drafts() {
       {drafts.map((draft) => (
         <li key={draft.id} className={`${card} p-4 sm:p-5`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-muted">
-                <span className="mr-2 inline-flex rounded-full bg-cream px-2 py-0.5 text-navy ring-1 ring-line">
-                  დრაფტი
-                </span>
-                {TRANSACTION_TYPES[draft.transactionType].label} ·{" "}
-                {PROPERTY_TYPES[draft.propertyType].label}
-              </p>
-              <h2 className="mt-1.5 text-base font-semibold break-words text-navy">
-                {draft.title}
-              </h2>
-              <p className="mt-0.5 text-sm text-muted">
-                {draft.city}, {draft.district} · {formatMoney(draft.amount, draft.currency)}
-                {draft.transactionType === "rent" ? " / თვე" : ""} ({draft.currency})
-              </p>
-              <p className="mt-0.5 text-xs text-subtle">
-                ბოლოს შენახულია: {savedOn(draft.updatedAt)}
-              </p>
+            <div className="flex min-w-0 gap-4">
+              <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-cream ring-1 ring-line sm:h-20 sm:w-28">
+                {draft.coverPhotoId ? (
+                  // Owner-only photo route (private, not cached).
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoUrl(draft.id, draft.coverPhotoId)}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center text-[11px] text-subtle">
+                    ფოტო არ არის
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted">
+                  <span className="mr-2 inline-flex rounded-full bg-cream px-2 py-0.5 text-navy ring-1 ring-line">
+                    დრაფტი
+                  </span>
+                  {TRANSACTION_TYPES[draft.transactionType].label} ·{" "}
+                  {PROPERTY_TYPES[draft.propertyType].label}
+                </p>
+                <h2 className="mt-1.5 text-base font-semibold break-words text-navy">
+                  {draft.title}
+                </h2>
+                <p className="mt-0.5 text-sm text-muted">
+                  {draft.city}, {draft.district} · {formatMoney(draft.amount, draft.currency)}
+                  {draft.transactionType === "rent" ? " / თვე" : ""} ({draft.currency})
+                </p>
+                <p className="mt-0.5 text-xs text-subtle">
+                  ბოლოს შენახულია: {savedOn(draft.updatedAt)}
+                  {draft.photoCount > 0 && ` · ${draft.photoCount} ფოტო`}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <Link
@@ -112,8 +132,8 @@ export default function MyListingsPage() {
           </Link>
         </div>
         <p className="mt-2 text-sm leading-6 text-muted">
-          დრაფტები პირადია: მათ მხოლოდ თქვენ ხედავთ, ძიებაში და რუკაზე არ ჩანს. გამოქვეყნება და
-          ფოტოების ატვირთვა მომდევნო ეტაპებზე დაემატება.
+          დრაფტები და მათი ფოტოები პირადია: მათ მხოლოდ თქვენ ხედავთ, ძიებაში და რუკაზე არ ჩანს.
+          გამოქვეყნება მომდევნო ეტაპზე დაემატება.
         </p>
         <Suspense fallback={<p className="mt-6 text-sm text-muted">იტვირთება…</p>}>
           <Drafts />

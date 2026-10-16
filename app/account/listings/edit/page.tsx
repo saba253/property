@@ -11,6 +11,8 @@ import { getSearchFacets } from "@/lib/data/listings";
 import { recordsToDraft } from "@/lib/drafts/draft-input";
 import { getDraftForUser } from "@/lib/drafts/draft-service";
 import { draftDeps } from "@/lib/drafts/instance";
+import { photoDeps } from "@/lib/photos/instance";
+import { listDraftPhotos } from "@/lib/photos/photo-service";
 
 export const metadata: Metadata = {
   title: "დრაფტის რედაქტირება | Property Intelligence",
@@ -34,13 +36,18 @@ async function EditDraft({
   }
   const item = await getDraftForUser(draftDeps, id);
   if (!item) notFound();
-  const [rateState, { districts }] = await Promise.all([getExchangeRateState(), getSearchFacets()]);
+  const [rateState, { districts }, photos] = await Promise.all([
+    getExchangeRateState(),
+    getSearchFacets(),
+    listDraftPhotos(photoDeps, item.listing.id),
+  ]);
   return (
     <ListingDraftWizard
       rateState={rateState}
       districts={districts}
       initialDraft={recordsToDraft(item)}
       draftId={item.listing.id}
+      initialPhotos={photos ?? []}
     />
   );
 }
@@ -55,7 +62,7 @@ export default function EditDraftPage({ searchParams }: PageProps<"/account/list
         დრაფტის რედაქტირება
       </h1>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-        დრაფტი პირადია და არ ქვეყნდება. ფოტოები ჯერ არ ინახება.
+        დრაფტი პირადია და არ ქვეყნდება. ფოტოებს მხოლოდ თქვენ ხედავთ.
       </p>
       <div className="mt-6">
         <Suspense fallback={<p className="text-sm text-muted">იტვირთება…</p>}>
