@@ -43,7 +43,12 @@ import {
   parseNonNegativeNumber,
   switchTransaction,
 } from "@/lib/properties/listing-filters";
-import { SORT_OPTIONS, type SortOption, parseSort } from "@/lib/properties/listing-sort";
+import {
+  type SortOption,
+  parseSort,
+  sortForTransaction,
+  sortOptionsFor,
+} from "@/lib/properties/listing-sort";
 import { PAGE_SIZE, lastPageOf, pageRequest, parsePage } from "@/lib/properties/listing-page";
 import { type ListingsView, parseListingsView } from "@/lib/properties/listings-view";
 import type { Currency, TransactionType } from "@/lib/properties/types";
@@ -158,8 +163,10 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   // List or map; legacy URLs without `view` keep the list. Every link below keeps the view.
   const { view, invalid: invalidView } = parseListingsView(rawQuery);
   // Sorting is a view setting like the display currency: every link below keeps it.
-  const { sort, invalid: invalidSort } = parseSort(rawQuery);
+  const { sort: requestedSort, invalid: invalidSort } = parseSort(rawQuery);
   const { filters, display } = parsed;
+  // Rentals show no price per m², so a price-per-m² sort is not offered and falls back there.
+  const sort = sortForTransaction(requestedSort, getTransaction(filters));
   // Page number: a view position like the list/map view. Links that change the criteria or the
   // sort go back to page 1; the currency and view toggles keep the page.
   const { page: requestedPage, invalid: invalidPage } = parsePage(rawQuery);
@@ -198,8 +205,9 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
     list: buildListingsHref(filters, display, "list", sort, page),
     map: buildListingsHref(filters, display, "map", sort, page),
   };
+  const sortOptions = sortOptionsFor(getTransaction(filters));
   const sortHrefs = Object.fromEntries(
-    SORT_OPTIONS.map((option) => [
+    sortOptions.map((option) => [
       option.value,
       buildListingsHref(filters, display, view, option.value),
     ]),
@@ -211,7 +219,12 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
   // Switching sale/rent keeps compatible filters but drops the budget (see switchTransaction).
   const transactionHrefs: Record<TransactionType, string> = {
     sale: buildListingsHref(switchTransaction(filters, "sale"), display, view, sort),
-    rent: buildListingsHref(switchTransaction(filters, "rent"), display, view, sort),
+    rent: buildListingsHref(
+      switchTransaction(filters, "rent"),
+      display,
+      view,
+      sortForTransaction(sort, "rent"),
+    ),
   };
   // Reset clears filters but keeps the view settings: sale/rent tab, display currency, list/map
   // view and sort order. The sort menu has its own "ნაგულისხმევი" option.
@@ -326,7 +339,7 @@ async function FilteredListings({ searchParams }: Pick<PageProps<"/properties">,
           <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
             {matches.length > 1 && (
               // The key closes the menu after a sort link was followed.
-              <SortMenu key={sort} current={sort} hrefFor={sortHrefs} />
+              <SortMenu key={sort} current={sort} hrefFor={sortHrefs} options={sortOptions} />
             )}
           </div>
         </div>

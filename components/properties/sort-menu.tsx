@@ -7,6 +7,8 @@ import { SORT_OPTIONS, type SortOption, sortLabel } from "@/lib/properties/listi
 
 type SortMenuProps = {
   current: SortOption;
+  /** The options to offer (rentals have no price-per-m² sorting). */
+  options?: readonly { value: SortOption; label: string }[];
   /** Link for every option, keeping all other search parameters. */
   hrefFor: Record<SortOption, string>;
 };
@@ -16,7 +18,7 @@ type SortMenuProps = {
  * without JavaScript, every option is a normal link (shareable `sort` URL), and moving through
  * the options with the keyboard does not reload the page. Escape and a click outside close it.
  */
-export function SortMenu({ current, hrefFor }: SortMenuProps) {
+export function SortMenu({ current, hrefFor, options = SORT_OPTIONS }: SortMenuProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
   useDismissableDetails(detailsRef);
@@ -41,7 +43,7 @@ export function SortMenu({ current, hrefFor }: SortMenuProps) {
         aria-label="დალაგების ვარიანტები"
         className="absolute right-0 z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-surface p-1.5 shadow-card-hover max-lg:fixed max-lg:inset-x-4 max-lg:top-auto max-lg:bottom-4 max-lg:z-[1300] max-lg:mx-auto max-lg:mt-0 max-lg:w-auto max-lg:max-w-md"
       >
-        {SORT_OPTIONS.map((option) => {
+        {options.map((option) => {
           const active = option.value === current;
           return (
             <li key={option.value}>

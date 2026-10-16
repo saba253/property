@@ -92,9 +92,16 @@ describe("rental prices", () => {
     expect(formatDisplayAmount(rentUnavailable)).toBe("₾1,800 / თვე");
   });
 
-  it("shows the monthly unit on price per m²", () => {
-    expect(formatDisplayPricePerSqm(rentConverted)).toBe("≈ $15.38 / მ² / თვე");
-    expect(formatDisplayPricePerSqm(rentNative)).toBe("$17.14 / მ² / თვე");
+  it("shows no price per m² for rentals, but keeps the number and the monthly rent", () => {
+    expect(formatDisplayPricePerSqm(rentConverted)).toBeNull();
+    expect(formatDisplayPricePerSqm(rentNative)).toBeNull();
+    expect(rentNative.pricePerSqm).not.toBeNull();
+    expect(formatDisplayAmount(rentNative)).toMatch(/ \/ თვე$/);
+  });
+
+  it("still shows the price per m² for sale prices", () => {
+    expect(formatDisplayPricePerSqm(native)).toMatch(/\/ მ²$/);
+    expect(formatDisplayPricePerSqm(native)).not.toContain("თვე");
   });
 
   it("names the original monthly rent", () => {

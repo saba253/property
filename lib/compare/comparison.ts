@@ -109,7 +109,7 @@ const countCell = (count: number | undefined): CompareCell =>
 
 /**
  * One column per listing. `display` is the currency for showing prices; the original price is
- * always shown as well. Rental prices keep "/ თვე" (and "/ მ² / თვე" per square metre).
+ * always shown as well. Rental prices keep "/ თვე"; rentals show no price per m².
  */
 export function buildComparisonColumns(
   items: readonly ListingWithProperty[],
@@ -139,7 +139,13 @@ export function buildComparisonColumns(
       originalPrice: value(
         `${formatMoney(listing.askingPrice.amount, listing.askingPrice.currency)}${periodSuffix(period)} (${listing.askingPrice.currency})`,
       ),
-      pricePerSqm: perSqm === null ? { kind: "unknown" } : value(perSqm),
+      // Rentals show no price per m² (the row is hidden when only rentals are compared).
+      pricePerSqm:
+        listing.transactionType === "rent"
+          ? { kind: "not-applicable" }
+          : perSqm === null
+            ? { kind: "unknown" }
+            : value(perSqm),
       area: value(formatArea(property.areaSqm)),
       rooms: countCell(property.rooms),
       bedrooms: countCell(property.bedrooms),
@@ -178,7 +184,7 @@ export function buildComparisonColumns(
       cells,
       numbers: {
         price: numeric("price"),
-        pricePerSqm: numeric("price_per_sqm"),
+        pricePerSqm: listing.transactionType === "rent" ? null : numeric("price_per_sqm"),
         area: comparableMeasure(item, "area", "USD", rateState),
       },
     };

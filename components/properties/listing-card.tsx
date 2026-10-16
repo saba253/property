@@ -22,6 +22,10 @@ type ListingCardProps = ListingWithProperty & {
   /** Cover image (selectCoverImage), or null for the "no images" placeholder. */
   coverImage: ListingImage | null;
   imageCount: number;
+  /** Heading level of the title (h3 inside a section that has its own h2). */
+  titleAs?: "h2" | "h3";
+  /** A sale/rent pill above the title (homepage carousel, where both kinds are mixed). */
+  transactionBadge?: boolean;
 };
 
 export function ListingCard({
@@ -31,6 +35,8 @@ export function ListingCard({
   href,
   coverImage,
   imageCount,
+  titleAs: Title = "h2",
+  transactionBadge = false,
 }: ListingCardProps) {
   const pricePerSqm = formatDisplayPricePerSqm(price);
   const facts = getCardFacts(property);
@@ -66,11 +72,28 @@ export function ListingCard({
         </div>
 
         <div className="mt-3 px-1">
-          <p className="text-xs font-semibold tracking-wide text-accent-700">
-            {TRANSACTION_TYPES[listing.transactionType].label} ·{" "}
-            {PROPERTY_TYPES[property.type].label}
-          </p>
-          <h2 className="mt-0.5 text-base font-semibold text-navy">{listing.title}</h2>
+          {transactionBadge ? (
+            // A clear sale/rent pill in the text (not over the image, where the illustration
+            // label must stay visible).
+            <p className="flex items-center gap-2 text-xs font-semibold">
+              <span
+                className={`rounded-full px-2.5 py-0.5 ${
+                  listing.transactionType === "rent"
+                    ? "bg-cream text-navy ring-1 ring-sand-200"
+                    : "bg-navy text-white"
+                }`}
+              >
+                {TRANSACTION_TYPES[listing.transactionType].label}
+              </span>
+              <span className="text-accent-700">{PROPERTY_TYPES[property.type].label}</span>
+            </p>
+          ) : (
+            <p className="text-xs font-semibold tracking-wide text-accent-700">
+              {TRANSACTION_TYPES[listing.transactionType].label} ·{" "}
+              {PROPERTY_TYPES[property.type].label}
+            </p>
+          )}
+          <Title className="mt-0.5 text-base font-semibold text-navy">{listing.title}</Title>
           <p className="mt-0.5 text-sm text-muted">
             {property.city}, {property.district}
           </p>

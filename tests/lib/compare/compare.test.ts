@@ -170,7 +170,11 @@ describe("comparison columns", () => {
   it("keeps monthly units for rentals", () => {
     const [rent] = columnsFor(["demo-listing-9"]);
     expect(rent.cells.price).toMatchObject({ text: expect.stringMatching(/\/ თვე$/) });
-    expect(rent.cells.pricePerSqm).toMatchObject({ text: expect.stringMatching(/\/ მ² \/ თვე$/) });
+    // Rentals show no price per m² (the row is hidden when only rentals are compared).
+    expect(rent.cells.pricePerSqm).toEqual({ kind: "not-applicable" });
+    expect(rent.numbers.pricePerSqm).toBeNull();
+    expect(visibleRows([rent]).some((row) => row.key === "pricePerSqm")).toBe(false);
+    expect(rent.cells.area).toMatchObject({ text: expect.stringContaining("მ²") });
     expect(rent.cells.originalPrice).toMatchObject({ text: expect.stringContaining("/ თვე") });
   });
 

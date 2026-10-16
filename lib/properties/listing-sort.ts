@@ -25,6 +25,20 @@ export const SORT_OPTIONS: readonly { value: SortOption; label: string }[] = [
   { value: "price_per_sqm_desc", label: "ფასი მ²-ზე: კლებადობით" },
 ];
 
+/** Sort options for a transaction type: rentals have no price-per-m² sorting (none is shown). */
+export function sortOptionsFor(
+  transaction: "sale" | "rent",
+): readonly { value: SortOption; label: string }[] {
+  return transaction === "rent"
+    ? SORT_OPTIONS.filter((option) => !option.value.startsWith("price_per_sqm"))
+    : SORT_OPTIONS;
+}
+
+/** The sort to use for a transaction type: a price-per-m² sort falls back to the default for rent. */
+export function sortForTransaction(sort: SortOption, transaction: "sale" | "rent"): SortOption {
+  return transaction === "rent" && sort.startsWith("price_per_sqm") ? "default" : sort;
+}
+
 const SORT_KEYS = new Set<string>(
   SORT_OPTIONS.map((option) => option.value).filter((v) => v !== "default"),
 );

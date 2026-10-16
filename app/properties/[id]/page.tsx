@@ -80,7 +80,11 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     GEL: getListingDisplayPrice(data, "GEL", rateState),
   };
   // Comparables are selected once per render, with the same rate snapshot as the prices.
-  const priceContext = getAskingPriceContext(data, await findComparableCandidates(data), rateState);
+  // The price-per-m² comparison is shown for sale listings only (none for rentals).
+  const priceContext =
+    listing.transactionType === "sale"
+      ? getAskingPriceContext(data, await findComparableCandidates(data), rateState)
+      : null;
 
   // Unknown facts are shown as "not specified"; nothing is invented to fill gaps.
   // City and district are shown under the title.
@@ -176,38 +180,41 @@ export default async function PropertyDetailPage({ params }: PageProps) {
             </div>
           </section>
 
-          <section aria-labelledby="calculation-heading" className="mt-10">
-            <h2 id="calculation-heading" className="text-xl font-semibold text-navy">
-              როგორ გამოითვლება ფასი კვადრატულ მეტრზე
-            </h2>
-            <Suspense
-              fallback={
-                <DetailPriceFormulaView prices={prices} areaSqm={property.areaSqm} display="USD" />
-              }
-            >
-              <DetailPriceFormula prices={prices} areaSqm={property.areaSqm} />
-            </Suspense>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
-              {listing.transactionType === "rent" ? (
-                <p>
-                  ქირა კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული თვიური ქირისა და ფართის
-                  მიხედვით. ეს არის მოთხოვნილი ქირა და არა დადასტურებული ხელშეკრულების პირობები.
-                </p>
-              ) : (
-                <p>
-                  ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის
-                  მიხედვით. ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან
-                  ღირებულებას.
-                </p>
-              )}
-              <p>
-                ორიგინალი ფასი და ვალუტა ({currency}) არ იცვლება. სხვა ვალუტაში ნაჩვენები ფასი
-                სავარაუდოა და ეროვნული ბანკის ოფიციალური კურსით გამოითვლება.
-              </p>
-            </div>
-          </section>
+          {/* Rentals show no price per m² and no price-per-m² comparison (product decision):
+              the monthly rent and the area are shown above. */}
+          {listing.transactionType === "sale" && (
+            <>
+              <section aria-labelledby="calculation-heading" className="mt-10">
+                <h2 id="calculation-heading" className="text-xl font-semibold text-navy">
+                  როგორ გამოითვლება ფასი კვადრატულ მეტრზე
+                </h2>
+                <Suspense
+                  fallback={
+                    <DetailPriceFormulaView
+                      prices={prices}
+                      areaSqm={property.areaSqm}
+                      display="USD"
+                    />
+                  }
+                >
+                  <DetailPriceFormula prices={prices} areaSqm={property.areaSqm} />
+                </Suspense>
+                <div className="mt-4 space-y-3 text-sm leading-6 text-muted">
+                  <p>
+                    ფასი კვადრატულ მეტრზე გამოითვლება განცხადებაში მითითებული ფასისა და ფართის
+                    მიხედვით. ეს არ არის გარიგების დადასტურებული ფასი და არ წარმოადგენს სამართლიან
+                    ღირებულებას.
+                  </p>
+                  <p>
+                    ორიგინალი ფასი და ვალუტა ({currency}) არ იცვლება. სხვა ვალუტაში ნაჩვენები ფასი
+                    სავარაუდოა და ეროვნული ბანკის ოფიციალური კურსით გამოითვლება.
+                  </p>
+                </div>
+              </section>
 
-          <AskingPriceContextSection subject={data} context={priceContext} />
+              {priceContext && <AskingPriceContextSection subject={data} context={priceContext} />}
+            </>
+          )}
 
           <section aria-labelledby="source-heading" className="mt-10">
             <h2 id="source-heading" className="text-xl font-semibold text-navy">

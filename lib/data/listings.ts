@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import { connection } from "next/server";
+import { selectFeaturedListings } from "@/lib/properties/featured";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import type {
   ListingCount,
@@ -80,20 +81,15 @@ export async function findComparableCandidates(subject: ListingWithProperty) {
   return (await getListingRepository()).findComparableCandidates(subject);
 }
 
-/** The first sale listings in default order (homepage). A paged query, not the whole catalog. */
-export async function getFeaturedSaleListings(limit: number) {
+/**
+ * Featured public listings of one city for the homepage carousel: sale and rent alternating in
+ * the default catalog order (lib/properties/featured.ts), at most `limit`. Two paged queries,
+ * public listings only (the repository's public statuses and data sources).
+ */
+export async function getFeaturedCityListings(citySlug: string, limit: number) {
   "use cache";
   listingCacheLife();
-  const repository = await getListingRepository();
-  // No budget or price sort, so no exchange rate is involved.
-  const { items } = await repository.searchListings({
-    filters: {},
-    display: "USD",
-    rateState: { status: "unavailable" },
-    sort: "default",
-    page: { offset: 0, limit },
-  });
-  return items;
+  return selectFeaturedListings(await getListingRepository(), citySlug, limit);
 }
 
 /**

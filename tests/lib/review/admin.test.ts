@@ -6,6 +6,7 @@ import { draftToRecords } from "@/lib/drafts/draft-input";
 import { createDraft, setActor } from "@/lib/drafts/draft-store";
 import { notificationsForUser } from "@/lib/notifications/notification-service";
 import { uploadDraftPhoto } from "@/lib/photos/photo-service";
+import { selectFeaturedListings } from "@/lib/properties/featured";
 import {
   type ReviewDeps,
   SELF_APPROVAL_CONFIRMATION,
@@ -307,5 +308,23 @@ describe("B: administrator self-approval", () => {
       ok: true,
     });
     expect(await statusOf(id)).toEqual({ status: "approved", claimed: null });
+  });
+});
+
+describe("homepage featured listings stay public-only", () => {
+  it("never includes approved, self-approved or submitted user listings (Tbilisi)", async () => {
+    const approved = await submitted("owner-a");
+    expect(await moderate(as("admin"), approved, "approve", null)).toMatchObject({ ok: true });
+    const selfApproved = await submitted("admin");
+    expect(await selfApproveListing(as("admin"), selfApproved, SELF_APPROVAL_CONFIRMATION)).toEqual(
+      { ok: true },
+    );
+    const pending = await submitted("owner-a");
+    const featured = await selectFeaturedListings(createPostgresRepository(db), "tbilisi", 8);
+    expect(featured.length).toBeGreaterThan(0);
+    const ids = featured.map((item) => item.listing.id);
+    for (const id of [approved, selfApproved, pending]) expect(ids).not.toContain(id);
+    expect(featured.every((item) => item.listing.dataSource === "demo")).toBe(true);
+    expect(featured.every((item) => item.property.city === "თბილისი")).toBe(true);
   });
 });

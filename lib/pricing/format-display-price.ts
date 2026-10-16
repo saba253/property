@@ -24,9 +24,13 @@ export function formatDisplayAmount(price: DisplayPrice): string {
   return price.isConverted ? `≈ ${text}` : text;
 }
 
-/** Price per m² in the display currency (with period for rent), or null if it cannot be shown. */
+/**
+ * Price per m² in the display currency, or null when it is not shown: rentals never show a
+ * price per m² (product decision; the monthly rent and the area are shown instead), and a sale
+ * price per m² can be missing. The number itself stays available in DisplayPrice.
+ */
 export function formatDisplayPricePerSqm(price: DisplayPrice): string | null {
-  if (price.pricePerSqm === null) {
+  if (price.period !== null || price.pricePerSqm === null) {
     return null;
   }
   const text = `${formatPricePerSqm(price.pricePerSqm, price.currency)}${periodSuffix(price.period)}`;
