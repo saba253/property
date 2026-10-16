@@ -170,6 +170,33 @@ describe("data access boundaries", () => {
     }
   });
 
+  it("keeps moderation on the server and its pages private", () => {
+    for (const file of all.filter(isClient)) {
+      expect(source(file), file).not.toMatch(
+        /from "@\/lib\/review\/(review-store|review-service)"/,
+      );
+    }
+    expect(source(join(root, "app", "moderation", "actions.ts"))).toMatch(/^"use server";/);
+    for (const page of [
+      join(root, "app", "moderation", "page.tsx"),
+      join(root, "app", "moderation", "review", "page.tsx"),
+      join(root, "app", "account", "listings", "view", "page.tsx"),
+    ]) {
+      expect(code(page), page).toContain("connection()");
+      expect(code(page), page).not.toContain('"use cache"');
+      expect(source(page), page).toMatch(/robots: \{ index: false, follow: false \}/);
+      // Unauthorized visitors get the ordinary 404 (no hint that the page exists).
+      expect(code(page), page).toContain("notFound()");
+    }
+    // Actions take no actor, owner or role from the browser.
+    for (const file of [
+      join(root, "app", "moderation", "actions.ts"),
+      join(root, "app", "account", "listings", "actions.ts"),
+    ]) {
+      expect(code(file), file).not.toMatch(/\b(userId|ownerId|moderatorId|role|actor)\s*[:,)]/);
+    }
+  });
+
   it("marks the page data module as server-only", () => {
     expect(source(join(root, "lib", "data", "listings.ts"))).toMatch(/^import "server-only";/);
   });

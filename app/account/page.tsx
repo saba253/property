@@ -7,6 +7,8 @@ import { ProfileForm, SignOutButton } from "@/components/auth/account-actions";
 import { AuthUnavailable } from "@/components/auth/auth-shell";
 import { card, pageContainer } from "@/components/ui/styles";
 import { getAuthStatus, getCurrentSession } from "@/lib/auth/instance";
+import { draftDeps } from "@/lib/drafts/instance";
+import { currentUserIsModerator } from "@/lib/review/review-service";
 
 export const metadata: Metadata = {
   title: "ჩემი ანგარიში | Property Intelligence",
@@ -30,6 +32,7 @@ async function Account() {
   const session = await getCurrentSession();
   if (!session) redirect("/login?next=/account");
   const { user } = session;
+  const moderator = await currentUserIsModerator(draftDeps);
 
   return (
     <div className="mt-6 space-y-5">
@@ -55,17 +58,35 @@ async function Account() {
           ჩემი განცხადებები
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          შენახული დრაფტები პირადია და არ ქვეყნდება. გამოქვეყნება მომდევნო ეტაპზე დაემატება.
+          დრაფტები პირადია. დასრულებული განცხადება შეგიძლიათ გაგზავნოთ მოდერაციაზე; დამტკიცებულიც კი
+          ჯერ არ ქვეყნდება — გამოქვეყნება მომდევნო ეტაპზე დაემატება.
         </p>
         <div className="mt-3 flex flex-wrap gap-4 text-sm font-semibold">
           <Link href="/account/listings" className="text-accent-700 hover:underline">
-            ჩემი დრაფტები →
+            ჩემი განცხადებები →
           </Link>
           <Link href="/properties/new" className="text-accent-700 hover:underline">
             ახალი დრაფტი
           </Link>
         </div>
       </section>
+
+      {moderator && (
+        <section aria-labelledby="moderation-heading" className={`${card} p-5 sm:p-6`}>
+          <h2 id="moderation-heading" className="text-lg font-semibold text-navy">
+            მოდერაცია
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            თქვენ მოდერატორი ხართ. განიხილეთ გაგზავნილი განცხადებები.
+          </p>
+          <Link
+            href="/moderation"
+            className="mt-3 inline-block text-sm font-semibold text-accent-700 hover:underline"
+          >
+            განხილვის რიგი →
+          </Link>
+        </section>
+      )}
 
       <SignOutButton />
     </div>

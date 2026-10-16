@@ -65,7 +65,9 @@ function toView(draftId: string, photo: StoredPhoto): PhotoView {
   };
 }
 
-const views = (draftId: string, photos: StoredPhoto[]) => photos.map((p) => toView(draftId, p));
+/** Stored photos as the owner-only (or moderator) view with their private URLs. */
+export const views = (draftId: string, photos: StoredPhoto[]) =>
+  photos.map((p) => toView(draftId, p));
 
 function logFailure(operation: string, error: unknown) {
   const code = (error as { code?: unknown } | null)?.code;

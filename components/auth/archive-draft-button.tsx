@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { archiveDraftAction } from "@/app/account/listings/actions";
 
-/** Removes a draft from "my listings" after a confirmation; it is archived, not destroyed. */
+/** Removes a listing from "my listings" after a confirmation; it is archived, not destroyed. */
 export function ArchiveDraftButton({ draftId, title }: { draftId: string; title: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -29,7 +29,9 @@ export function ArchiveDraftButton({ draftId, title }: { draftId: string; title:
       aria-label="წაშლის დადასტურება"
       className="inline-flex flex-wrap items-center gap-2 text-sm"
     >
-      <span className="text-muted">წავშალოთ დრაფტი?</span>
+      <span className="text-muted">
+        წავშალოთ განცხადება? ისტორია შეინახება, აღდგენა ჯერ შეუძლებელია.
+      </span>
       <button
         type="button"
         disabled={pending}

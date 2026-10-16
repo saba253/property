@@ -116,18 +116,12 @@ export function validateListingRecord(listing: Listing): RecordIssue[] {
   if (listing.dataSource !== "demo" && listing.dataSource !== "user") {
     issues.push({ field: "dataSource", message: "only demo or user records can be stored" });
   }
-  // Same rules as the database: user data stays a private draft; drafts are user data.
-  if (
-    listing.dataSource === "user" &&
-    listing.status !== "draft" &&
-    listing.status !== "archived"
-  ) {
+  // Same rules as the database: user data is never public; review statuses are user data.
+  const isPublicStatus = listing.status === "active" || listing.status === "inactive";
+  if (listing.dataSource === "user" && isPublicStatus) {
     issues.push({ field: "status", message: "user listings cannot be published yet" });
   }
-  if (
-    (listing.status === "draft" || listing.status === "archived") &&
-    listing.dataSource !== "user"
-  ) {
+  if (!isPublicStatus && listing.dataSource !== "user") {
     issues.push({ field: "status", message: "only user listings can be drafts" });
   }
   return issues;

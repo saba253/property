@@ -123,10 +123,19 @@ export type HouseProperty = PropertyBase &
 export type Property = ApartmentProperty | HouseProperty;
 
 /**
- * "active": public. "inactive": ended. "draft": private draft of its owner (data source "user").
- * "archived": a draft removed by its owner (kept, reversible). Only "active" is ever searched.
+ * Demo/public data: "active" (public) and "inactive" (ended); only "active" is ever searched.
+ * User data (private, see lib/review/statuses.ts and migration 0005): "draft", "submitted",
+ * "changes_requested", "approved" (not published yet), "rejected" (final) and "archived".
  */
-export type ListingStatus = "draft" | "active" | "inactive" | "archived";
+export type ListingStatus =
+  | "draft"
+  | "submitted"
+  | "changes_requested"
+  | "approved"
+  | "rejected"
+  | "archived"
+  | "active"
+  | "inactive";
 
 type ListingBase = {
   id: string;

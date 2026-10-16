@@ -5,8 +5,10 @@ import { type SqlClient, type SqlConnection, withTransaction } from "@/lib/db/sq
 /*
  * Draft photo metadata in PostgreSQL (listing_images rows with source_kind = 'upload', migration
  * 0004). Every statement is limited to a listing that belongs to `ownerId` (taken from the
- * verified session by the caller), is user data and is a draft; another user's draft behaves like
- * a missing one. Changes run in a transaction that first locks the draft row (SELECT ... FOR
+ * verified session by the caller) and is user data; another user's draft behaves like a missing
+ * one. Changes need an editable status (draft, changes requested; migration 0005); the owner can
+ * read photos in every other status except archived, and moderators can read the photos of
+ * submitted listings. Changes run in a transaction that first locks the draft row (SELECT ... FOR
  * UPDATE), so concurrent uploads, reorders and deletions of one draft happen one after another:
  * the 10-photo limit, the single cover and the gap-free order cannot be broken by races.
  */
@@ -32,8 +34,12 @@ type PhotoRow = {
 };
 
 const PHOTO_COLUMNS = "i.id, i.sort_order, i.is_cover, i.alt, i.width, i.height, i.byte_size";
+/** The owner's listing in a status that allows changes. */
 const DRAFT_OWNED =
-  "l.id = $2 AND l.owner_user_id = $1 AND l.data_source = 'user' AND l.status = 'draft'";
+  "l.id = $2 AND l.owner_user_id = $1 AND l.data_source = 'user' AND l.status IN ('draft', 'changes_requested')";
+/** The owner's listing in any status except archived (reading). */
+const OWNED_READABLE =
+  "l.id = $2 AND l.owner_user_id = $1 AND l.data_source = 'user' AND l.status <> 'archived'";
 const PHOTO_ID = /^ph-[0-9a-f-]{36}$/;
 
 export function isPhotoId(value: unknown): value is string {
@@ -66,7 +72,8 @@ async function lockDraft(db: SqlClient, ownerId: string, listingId: string): Pro
   return rows.length === 1;
 }
 
-async function photosOf(db: SqlClient, listingId: string): Promise<StoredPhoto[]> {
+/** All uploaded photos of a listing in order; callers check who may see them. */
+export async function photosOf(db: SqlClient, listingId: string): Promise<StoredPhoto[]> {
   const { rows } = await db.query<PhotoRow>(
     `SELECT ${PHOTO_COLUMNS} FROM listing_images i
      WHERE i.listing_id = $1 AND i.source_kind = 'upload' ORDER BY i.sort_order, i.id`,
@@ -94,28 +101,31 @@ async function touchDraft(db: SqlClient, listingId: string) {
   await db.query("UPDATE listings SET updated_at = now() WHERE id = $1", [listingId]);
 }
 
-/** The owner's draft photos in order, or null when the draft is not theirs (or not a draft). */
+/** The owner's photos in order, or null when the listing is not theirs (or archived). */
 export async function listPhotos(
   db: SqlClient,
   ownerId: string,
   listingId: string,
 ): Promise<StoredPhoto[] | null> {
-  const { rows } = await db.query(`SELECT l.id FROM listings l WHERE ${DRAFT_OWNED}`, [
+  const { rows } = await db.query(`SELECT l.id FROM listings l WHERE ${OWNED_READABLE}`, [
     ownerId,
     listingId,
   ]);
   return rows.length === 1 ? photosOf(db, listingId) : null;
 }
 
-/** Cheap check before processing an upload: "ok", "not-found" or "limit". */
+/** Cheap check before processing an upload: "ok", "not-found" (or not editable) or "limit". */
 export async function canAddPhoto(
   db: SqlClient,
   ownerId: string,
   listingId: string,
 ): Promise<"ok" | "not-found" | "limit"> {
-  const photos = await listPhotos(db, ownerId, listingId);
-  if (!photos) return "not-found";
-  return photos.length >= MAX_DRAFT_PHOTOS ? "limit" : "ok";
+  const { rows } = await db.query(`SELECT l.id FROM listings l WHERE ${DRAFT_OWNED}`, [
+    ownerId,
+    listingId,
+  ]);
+  if (rows.length === 0) return "not-found";
+  return (await photosOf(db, listingId)).length >= MAX_DRAFT_PHOTOS ? "limit" : "ok";
 }
 
 /**
@@ -248,17 +258,23 @@ export async function deletePhoto(
   });
 }
 
-/** The storage key of one photo of the owner's (non-archived) draft, or null. */
+/**
+ * The storage key of one photo, or null. Readable by the listing's owner in every status except
+ * archived, and by a moderator (user_roles) while the listing is submitted for review.
+ */
 export async function findPhotoFile(
   db: SqlClient,
-  ownerId: string,
+  viewerId: string,
   listingId: string,
   photoId: string,
 ): Promise<{ storageKey: string; mimeType: string } | null> {
   const { rows } = await db.query<{ storage_key: string; mime_type: string }>(
     `SELECT i.storage_key, i.mime_type FROM listing_images i JOIN listings l ON l.id = i.listing_id
-     WHERE ${DRAFT_OWNED} AND i.id = $3 AND i.source_kind = 'upload'`,
-    [ownerId, listingId, photoId],
+     WHERE l.id = $2 AND l.data_source = 'user' AND i.id = $3 AND i.source_kind = 'upload'
+       AND ((l.owner_user_id = $1 AND l.status <> 'archived')
+         OR (l.status = 'submitted' AND EXISTS (
+           SELECT 1 FROM user_roles r WHERE r.user_id = $1 AND r.role = 'moderator')))`,
+    [viewerId, listingId, photoId],
   );
   return rows[0] ? { storageKey: rows[0].storage_key, mimeType: rows[0].mime_type } : null;
 }

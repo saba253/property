@@ -27,8 +27,10 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `db/migrations/0001_initial_schema.sql`      | cities, properties, listings, property_features, listing_equipment, listing_images, indexes |
 | `db/migrations/0002_auth_accounts.sql`       | Better Auth tables, `listings.owner_user_id`                                                |
 | `db/migrations/0003_user_listing_drafts.sql` | private drafts of signed-in users (`data_source = 'user'`)                                  |
+| `db/migrations/0005_listing_moderation.sql`  | submission/moderation statuses, roles, immutable status events (see `docs/MODERATION.md`)   |
 | `db/migrations/0004_draft_photo_uploads.sql` | uploaded draft photos in `listing_images` (`source_kind = 'upload'`)                        |
 | `lib/drafts/*`                               | draft input whitelist, store (SQL), service (ownership), server wiring                      |
+| `lib/review/*`                               | status table, submission and moderation SQL/service (`docs/MODERATION.md`)                  |
 | `lib/photos/*`                               | photo processing, storage adapter, SQL, service, routes' helpers (see `docs/STORAGE.md`)    |
 | `lib/db/config.ts`                           | `DATA_BACKEND` / `DATABASE_URL` parsing; errors without secrets; local-host check           |
 | `lib/db/migrations.ts`                       | migration runner (ordered, one transaction each, checksums, advisory lock)                  |
@@ -40,6 +42,7 @@ avoids two extra packages (`drizzle-orm`, `drizzle-kit`). The `SqlClient` interf
 | `lib/repository/*`                           | interface, memory backend, backend selection                                                |
 | `lib/data/listings.ts`                       | server-only, cached reads for pages                                                         |
 | `scripts/db.mts`                             | `db:status`, `db:migrate`, `db:seed:demo`                                                   |
+| `scripts/roles.mts`                          | `roles -- list                                                                              | grant <email> | revoke <email>` (moderator role, local only) |
 | `scripts/photos.mts`                         | `photos:orphans` (unreferenced photo files; read-only unless `-- --delete`)                 |
 
 ## Accounts (Step 1.21)
@@ -97,6 +100,17 @@ the listing and accept only public listings and non-upload images. Files, proces
 backup and the orphan check are described in `docs/STORAGE.md`. The migration only replaces CHECK
 constraints and relaxes one NOT NULL; the test in `tests/lib/db/migrations.test.ts` allows exactly
 these two non-destructive patterns.
+
+## Moderation (Step 1.24)
+
+`0005_listing_moderation.sql` widens the user statuses to draft, submitted, changes_requested,
+approved, rejected and archived (user listings still can never be active/inactive), adds
+`listings.submitted_at`, `user_roles` and the append-only `listing_status_events`, and triggers
+that enforce the transition table, the actor (owner or moderator, stated per transaction with
+`set_config`), the self-review ban, the photo requirement for submission and frozen content and
+photos outside draft/changes_requested. Only CHECK constraints are replaced; the migration test
+also allows a `BEFORE TRUNCATE ON …` trigger, which forbids truncation. Details:
+`docs/MODERATION.md`.
 
 ## Schema notes
 

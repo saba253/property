@@ -24,6 +24,7 @@ describe("migration files", () => {
       "0002_auth_accounts",
       "0003_user_listing_drafts",
       "0004_draft_photo_uploads",
+      "0005_listing_moderation",
     ]);
     expect(migrationChecksum("a\r\nb")).toBe(migrationChecksum("a\nb"));
     expect(() => parseMigrations([{ file: "1_bad.sql", sql: "" }])).toThrow("Unexpected");
@@ -37,11 +38,13 @@ describe("migration files", () => {
 
   it("contain no destructive statements", () => {
     for (const { sql } of loadMigrations()) {
-      // Replacing a CHECK constraint (DROP CONSTRAINT + ADD CONSTRAINT) and relaxing a NOT NULL
-      // remove no data; every other DROP, TRUNCATE or DELETE is forbidden.
+      // Replacing a CHECK constraint (DROP CONSTRAINT + ADD CONSTRAINT), relaxing a NOT NULL and
+      // a trigger that FORBIDS truncating (BEFORE TRUNCATE ON ...) remove no data; every other
+      // DROP, TRUNCATE or DELETE is forbidden.
       const withoutConstraintSwaps = sql
         .replace(/DROP CONSTRAINT\s+\w+;\s*ALTER TABLE \w+ ADD CONSTRAINT/gi, "")
-        .replace(/ALTER COLUMN \w+ DROP NOT NULL;/gi, "");
+        .replace(/ALTER COLUMN \w+ DROP NOT NULL;/gi, "")
+        .replace(/BEFORE TRUNCATE ON \w+/gi, "");
       expect(withoutConstraintSwaps).not.toMatch(/\b(DROP|TRUNCATE)\b/i);
       expect(sql).not.toMatch(/\bDELETE\s+FROM\b/i);
     }
@@ -52,7 +55,7 @@ describe("running migrations", () => {
   it("applies pending migrations once and records them", async () => {
     db = await createTestDatabase({ migrate: false });
     const migrations = loadMigrations();
-    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002", "0003", "0004"]);
+    expect(await runMigrations(db, migrations)).toEqual(["0001", "0002", "0003", "0004", "0005"]);
     expect(await runMigrations(db, migrations)).toEqual([]);
     const status = await getMigrationStatus(db, migrations);
     expect(status.pending).toEqual([]);
@@ -61,6 +64,7 @@ describe("running migrations", () => {
       { version: "0002", name: "auth_accounts" },
       { version: "0003", name: "user_listing_drafts" },
       { version: "0004", name: "draft_photo_uploads" },
+      { version: "0005", name: "listing_moderation" },
     ]);
     const { rows } = await db.query<{ count: number }>("SELECT count(*)::int AS count FROM cities");
     expect(rows[0].count).toBe(2);

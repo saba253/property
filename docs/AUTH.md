@@ -163,7 +163,8 @@ server after changing `.env.local`. A local production build (`next start`) also
   same 404 as a missing one. Pages are per request, never cached, `noindex`.
 - Photos (Step 1.23): signed-in owners upload up to 10 photos per saved draft; they are
   re-encoded without metadata, stored privately and served only to the owner. Details:
-  `docs/STORAGE.md`. Publishing does not exist yet: the database forbids a user listing in any
+  `docs/STORAGE.md`. Submission and moderation (Step 1.24): `docs/MODERATION.md`. Publishing
+  does not exist yet: the database forbids a user listing in any
   status other than draft or archived.
 
 ## Rotating local secrets (done 2026-10-16)

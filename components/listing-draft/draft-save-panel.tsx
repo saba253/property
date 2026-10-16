@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveDraftAction } from "@/app/account/listings/actions";
 import { useAccountStatus } from "@/components/auth/use-account-status";
+import { ListingReviewControls } from "@/components/review/listing-review-controls";
 import { buttonPrimary, buttonSecondary } from "@/components/ui/styles";
 import type { ListingDraft } from "@/lib/listing-draft/draft";
+import type { UserListingStatus } from "@/lib/review/statuses";
 
 /*
  * Saving the reviewed draft. Signed-in users store it as a private database draft (Server
@@ -32,14 +35,21 @@ export function DraftSavePanel({
   draftId,
   saved,
   onSaved,
+  listingStatus = "draft",
+  storedPhotoCount = 0,
 }: {
   draft: ListingDraft;
   draftId: string | null;
   /** True when the current entries equal the last successfully saved version. */
   saved: boolean;
   onSaved: (id: string) => void;
+  /** Review status of the stored listing (draft or changes requested while editing). */
+  listingStatus?: UserListingStatus;
+  /** Photos stored with the listing (submission needs at least one). */
+  storedPhotoCount?: number;
 }) {
   const status = useAccountStatus();
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasLocalPhotos = draft.photos.length > 0;
@@ -120,6 +130,15 @@ export function DraftSavePanel({
         >
           {pending ? "ინახება…" : draftId ? "ცვლილებების შენახვა" : "შენახვა დრაფტად"}
         </button>
+      )}
+      {/* Submission only for the stored version: unsaved changes must be saved first. */}
+      {saved && draftId && (
+        <ListingReviewControls
+          listingId={draftId}
+          status={listingStatus}
+          photoCount={storedPhotoCount}
+          onDone={() => router.push("/account/listings")}
+        />
       )}
     </div>
   );

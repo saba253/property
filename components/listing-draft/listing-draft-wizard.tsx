@@ -34,7 +34,8 @@ import {
   draftReducer,
 } from "@/lib/listing-draft/draft-state";
 import { parseDraftInput } from "@/lib/drafts/draft-input";
-import type { PhotoView } from "@/lib/photos/photo-types";
+import { type PhotoView, storedAsDraftPhotos } from "@/lib/photos/photo-types";
+import type { UserListingStatus } from "@/lib/review/statuses";
 import { assertNever } from "@/lib/properties/listing-types";
 import type { DistrictOption } from "@/lib/properties/cities";
 
@@ -48,22 +49,9 @@ type ListingDraftWizardProps = {
   draftId?: string | null;
   /** The draft's stored photos (owner-only), when editing a saved draft. */
   initialPhotos?: PhotoView[];
+  /** Review status of the stored listing (draft or changes requested). */
+  initialStatus?: UserListingStatus;
 };
-
-/** Stored photos in the preview's shape: the cover first, then the chosen order. */
-function storedAsDraftPhotos(photos: readonly PhotoView[]): DraftPhoto[] {
-  const ordered = [...photos].sort(
-    (a, b) => Number(b.isCover) - Number(a.isCover) || a.order - b.order,
-  );
-  return ordered.map((photo) => ({
-    id: photo.id,
-    url: photo.url,
-    fileName: "",
-    sizeBytes: photo.byteSize,
-    mimeType: "image/webp",
-    alt: photo.alt,
-  }));
-}
 
 /** The draft without photos, to compare with the last saved version. */
 const snapshot = (draft: ListingDraft) => JSON.stringify({ ...draft, photos: [] });
@@ -107,6 +95,7 @@ export function ListingDraftWizard({
   initialDraft,
   draftId: initialDraftId = null,
   initialPhotos = [],
+  initialStatus = "draft",
 }: ListingDraftWizardProps) {
   const [state, dispatch] = useReducer(draftReducer, initialDraft, (draft) =>
     draft
@@ -511,6 +500,8 @@ export function ListingDraftWizard({
             draft={state.draft}
             draftId={draftId}
             saved={saved}
+            listingStatus={initialStatus}
+            storedPhotoCount={storesPhotos ? storedPhotos.length : 0}
             onSaved={(id) => {
               setDraftId(id);
               setSavedSnapshot(snapshot(state.draft));

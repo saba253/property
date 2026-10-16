@@ -15,7 +15,8 @@
     "db:status": "node --import ./scripts/register-aliases.mjs scripts/db.mts status",
     "db:migrate": "node --import ./scripts/register-aliases.mjs scripts/db.mts migrate",
     "db:seed:demo": "node --import ./scripts/register-aliases.mjs scripts/db.mts seed-demo",
-    "photos:orphans": "node --import ./scripts/register-aliases.mjs scripts/photos.mts"
+    "photos:orphans": "node --import ./scripts/register-aliases.mjs scripts/photos.mts",
+    "roles": "node --import ./scripts/register-aliases.mjs scripts/roles.mts"
   },
   "dependencies": {
     "better-auth": "1.7.6",

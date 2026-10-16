@@ -1,3 +1,5 @@
+import type { DraftPhoto } from "@/lib/listing-draft/draft";
+
 /*
  * Shapes shared by the photo routes and the upload UI (no server code, safe for the browser).
  */
@@ -40,4 +42,19 @@ export const PHOTO_ERRORS: Record<string, string> = {
 
 export function photoErrorMessage(code: string | null | undefined): string {
   return PHOTO_ERRORS[code ?? ""] ?? PHOTO_ERRORS.unavailable;
+}
+
+/** Stored photos in the preview gallery's shape: the cover first, then the chosen order. */
+export function storedAsDraftPhotos(photos: readonly PhotoView[]): DraftPhoto[] {
+  const ordered = [...photos].sort(
+    (a, b) => Number(b.isCover) - Number(a.isCover) || a.order - b.order,
+  );
+  return ordered.map((photo) => ({
+    id: photo.id,
+    url: photo.url,
+    fileName: "",
+    sizeBytes: photo.byteSize,
+    mimeType: "image/webp",
+    alt: photo.alt,
+  }));
 }

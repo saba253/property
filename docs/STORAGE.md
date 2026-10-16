@@ -55,6 +55,10 @@ restarts and PostgreSQL restarts. Nothing is public: there is no publishing yet.
 - Public queries (search, map, detail pages, favorites, comparison, `/api/listings/summaries`,
   covers) read only images of public listings and never `upload` rows, even if a draft id is
   passed in. The database refuses upload rows on demo listings and demo-style images on drafts.
+- **Review statuses (Step 1.24):** photos can be added, reordered, described or removed only in
+  `draft` and `changes_requested` (application and database trigger). The owner can view them in
+  every other status except archived; moderators can view them only while the listing is
+  `submitted`.
 - **Archived drafts:** their photos are kept unchanged (archiving is reversible) but cannot be
   viewed or changed until a future restore feature exists. Nothing is hard-deleted on archive.
 
@@ -111,7 +115,10 @@ photos become public with publishing. No paid service is used today.
   closed but returned in a new tab. It disappeared after deleting the generated `.next/dev`
   folder; at the same time a `/* turbopackIgnore: true */` hint was added to `process.cwd()` in
   `lib/photos/instance.ts`. Which of the two fixed it is unknown, and the loop could not be
-  reproduced afterwards (see PROJECT_CONTEXT.md). If it happens again: stop `npm run dev`,
+  reproduced afterwards (see PROJECT_CONTEXT.md). It happened once more in Step 1.24 after a long
+  development session; deleting `.next/dev` stopped it again. Observed mechanism: every request was followed by a new
+  compilation, the browser's HMR version no longer matched and the server sent `RELOAD_PAGE`.
+  The trigger is still unknown and this is only a workaround, not a fix. If it happens again: stop `npm run dev`,
   delete `.next/dev` (generated; no source or data) and start it again.
 
 ## Commands (Windows, from the project folder)

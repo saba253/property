@@ -19,6 +19,7 @@ import {
 } from "@/lib/photos/photo-service";
 import { addUser, depsFor, sampleDraft } from "../lib/drafts/draft-fixtures";
 import { jpeg, tempStorage } from "../lib/photos/photo-fixtures";
+import { type ReviewDeps, moderate, submitForReview } from "@/lib/review/review-service";
 
 /*
  * OPT-IN integration tests against a real PostgreSQL SERVER through the `pg` driver (not PGlite).
@@ -204,6 +205,77 @@ run("real PostgreSQL server", () => {
       const otherDeps: PhotoDeps = { ...deps, currentUserId: async () => other };
       expect(await readDraftPhoto(otherDeps, saved.id, photos![0].id)).toBeNull();
       expect((await readDraftPhoto(deps, saved.id, photos![0].id))?.mimeType).toBe("image/webp");
+    } finally {
+      await temp.cleanup();
+    }
+  });
+
+  it("accepts exactly one of many simultaneous moderation decisions (pg pool)", async () => {
+    const owner = `real-rev-owner-${runId}`;
+    const mods = [`real-rev-mod1-${runId}`, `real-rev-mod2-${runId}`];
+    for (const id of [owner, ...mods]) await addUser(db, id);
+    for (const id of mods) {
+      await db.query("INSERT INTO user_roles (user_id, role) VALUES ($1, 'moderator')", [id]);
+    }
+    const saved = await saveDraftForUser(depsFor(db, owner), sampleDraft(), null);
+    if (!saved.ok) throw new Error(saved.reason);
+    const temp = await tempStorage();
+    try {
+      const withPool: ReviewDeps["withConnection"] = async (work) => {
+        const client = await pool.connect();
+        try {
+          return await work({
+            singleConnection: true,
+            query: async (text, params = []) => ({
+              rows: (await client.query(text, [...params])).rows,
+            }),
+            exec: async (text) => {
+              await client.query(text);
+            },
+          });
+        } finally {
+          client.release();
+        }
+      };
+      const limits = () => ({
+        submit: createRateLimiter({ limit: 1000, windowMs: 60_000 }),
+        decide: createRateLimiter({ limit: 1000, windowMs: 60_000 }),
+      });
+      const photo = await uploadDraftPhoto(
+        {
+          currentUserId: async () => owner,
+          withConnection: withPool,
+          storage: temp.storage,
+          limiters: {
+            upload: createRateLimiter({ limit: 100, windowMs: 60_000 }),
+            change: createRateLimiter({ limit: 100, windowMs: 60_000 }),
+          },
+        },
+        saved.id,
+        await jpeg(16, 16),
+      );
+      expect(photo.ok).toBe(true);
+      const as = (userId: string): ReviewDeps => ({
+        currentUserId: async () => userId,
+        withConnection: withPool,
+        limiters: limits(),
+      });
+      expect(await submitForReview(as(owner), saved.id)).toEqual({ ok: true });
+      const results = await Promise.all([
+        moderate(as(mods[0]), saved.id, "approve", null),
+        moderate(as(mods[1]), saved.id, "reject", "duplicate"),
+        moderate(as(mods[0]), saved.id, "request-changes", "fix"),
+        moderate(as(mods[1]), saved.id, "approve", null),
+        moderate(as(mods[0]), saved.id, "reject", "no"),
+        moderate(as(mods[1]), saved.id, "request-changes", "x"),
+      ]);
+      expect(results.filter((r) => r.ok).length).toBe(1);
+      expect(results.filter((r) => !r.ok && r.reason === "conflict").length).toBe(5);
+      const { rows } = await db.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM listing_status_events WHERE listing_id = $1 AND actor_role = 'moderator'",
+        [saved.id],
+      );
+      expect(rows[0].n).toBe(1);
     } finally {
       await temp.cleanup();
     }

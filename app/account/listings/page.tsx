@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { ArchiveDraftButton } from "@/components/auth/archive-draft-button";
+import { ListingReviewControls } from "@/components/review/listing-review-controls";
+import { StatusBadge } from "@/components/review/status-badge";
 import { AuthUnavailable } from "@/components/auth/auth-shell";
 import { buttonPrimary, card, pageContainer } from "@/components/ui/styles";
 import { getAuthStatus } from "@/lib/auth/instance";
@@ -12,6 +14,7 @@ import { draftDeps } from "@/lib/drafts/instance";
 import { photoUrl } from "@/lib/photos/photo-types";
 import { formatMoney } from "@/lib/pricing/format-money";
 import { PROPERTY_TYPES, TRANSACTION_TYPES } from "@/lib/properties/listing-types";
+import { EDITABLE_STATUSES, STATUS_TEXT } from "@/lib/review/statuses";
 
 export const metadata: Metadata = {
   title: "ჩემი განცხადებები | Property Intelligence",
@@ -45,7 +48,7 @@ async function Drafts() {
   if (drafts.length === 0) {
     return (
       <div className="mt-6 rounded-card border border-dashed border-line-strong bg-surface px-6 py-10 text-center">
-        <p className="text-base font-semibold text-navy">ჯერ დრაფტი არ გაქვთ.</p>
+        <p className="text-base font-semibold text-navy">ჯერ განცხადება არ გაქვთ.</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
           შეავსეთ განცხადების ფორმა და ბოლო ნაბიჯზე შეინახეთ დრაფტად. დრაფტი პირადია და არ
           ქვეყნდება.
@@ -80,12 +83,12 @@ async function Drafts() {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted">
-                  <span className="mr-2 inline-flex rounded-full bg-cream px-2 py-0.5 text-navy ring-1 ring-line">
-                    დრაფტი
+                <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
+                  <StatusBadge status={draft.status} />
+                  <span>
+                    {TRANSACTION_TYPES[draft.transactionType].label} ·{" "}
+                    {PROPERTY_TYPES[draft.propertyType].label}
                   </span>
-                  {TRANSACTION_TYPES[draft.transactionType].label} ·{" "}
-                  {PROPERTY_TYPES[draft.propertyType].label}
                 </p>
                 <h2 className="mt-1.5 text-base font-semibold break-words text-navy">
                   {draft.title}
@@ -101,14 +104,38 @@ async function Drafts() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Link
-                href={`/account/listings/edit?draft=${encodeURIComponent(draft.id)}`}
-                className="text-sm font-semibold text-accent-700 hover:underline"
-              >
-                გაგრძელება
-              </Link>
-              <ArchiveDraftButton draftId={draft.id} title={draft.title} />
+              {EDITABLE_STATUSES.includes(draft.status) ? (
+                <Link
+                  href={`/account/listings/edit?draft=${encodeURIComponent(draft.id)}`}
+                  className="text-sm font-semibold text-accent-700 hover:underline"
+                >
+                  {draft.status === "changes_requested" ? "შესწორება" : "გაგრძელება"}
+                </Link>
+              ) : (
+                <Link
+                  href={`/account/listings/view?listing=${encodeURIComponent(draft.id)}`}
+                  className="text-sm font-semibold text-accent-700 hover:underline"
+                >
+                  ნახვა
+                </Link>
+              )}
+              {draft.status !== "submitted" && (
+                <ArchiveDraftButton draftId={draft.id} title={draft.title} />
+              )}
             </div>
+          </div>
+          <div className="mt-3 space-y-2 border-t border-line pt-3">
+            <p className="text-sm text-muted">{STATUS_TEXT[draft.status].note}</p>
+            {draft.reason && (
+              <p className="rounded-xl bg-cream px-3 py-2 text-sm text-navy ring-1 ring-line">
+                <span className="font-semibold">მოდერატორის კომენტარი:</span> {draft.reason}
+              </p>
+            )}
+            <ListingReviewControls
+              listingId={draft.id}
+              status={draft.status}
+              photoCount={draft.photoCount}
+            />
           </div>
         </li>
       ))}
@@ -132,8 +159,9 @@ export default function MyListingsPage() {
           </Link>
         </div>
         <p className="mt-2 text-sm leading-6 text-muted">
-          დრაფტები და მათი ფოტოები პირადია: მათ მხოლოდ თქვენ ხედავთ, ძიებაში და რუკაზე არ ჩანს.
-          გამოქვეყნება მომდევნო ეტაპზე დაემატება.
+          განცხადებები და მათი ფოტოები პირადია: მათ მხოლოდ თქვენ ხედავთ (განხილვისას — მოდერატორიც),
+          ძიებაში და რუკაზე არ ჩანს. დამტკიცებულიც კი ჯერ არ ქვეყნდება: გამოქვეყნება მომდევნო ეტაპზე
+          დაემატება.
         </p>
         <Suspense fallback={<p className="mt-6 text-sm text-muted">იტვირთება…</p>}>
           <Drafts />

@@ -5,6 +5,7 @@ import { type SqlClient, type SqlConnection, withTransaction } from "@/lib/db/sq
 import { findCityByName } from "@/lib/properties/cities";
 import type { ListingWithProperty } from "@/lib/properties/get-demo-listing";
 import type { Currency, PropertyType, TransactionType } from "@/lib/properties/types";
+import type { UserListingStatus } from "@/lib/review/statuses";
 
 /*
  * Private listing drafts in PostgreSQL. Ownership rules, enforced in every query:
@@ -31,6 +32,9 @@ export type DraftSummary = {
   /** Number of uploaded photos and the cover's id (null without photos). */
   photoCount: number;
   coverPhotoId: string | null;
+  /** Review status (never "archived" here) and the moderator's reason for it, if any. */
+  status: UserListingStatus;
+  reason: string | null;
 };
 
 /** Upper bound of drafts per user; a sensible limit for one person's private drafts. */
@@ -44,6 +48,21 @@ export class DraftLimitError extends Error {
 }
 
 const OWNED = "l.owner_user_id = $1 AND l.data_source = 'user'";
+/** Statuses in which the owner may change content and photos (migration 0005). */
+const EDITABLE = "l.status IN ('draft', 'changes_requested')";
+
+/** States who changes a status in this transaction (read by the database triggers, 0005). */
+export async function setActor(
+  db: SqlClient,
+  actorId: string,
+  role: "owner" | "moderator",
+  reason: string | null = null,
+) {
+  await db.query(
+    "SELECT set_config('app.actor_user_id', $1, true), set_config('app.actor_role', $2, true), set_config('app.status_reason', $3, true)",
+    [actorId, role, reason ?? ""],
+  );
+}
 
 async function hydrate(db: SqlClient, rows: ListingRow[]): Promise<ListingWithProperty[]> {
   if (rows.length === 0) return [];
@@ -121,7 +140,7 @@ export async function createDraft(
   };
   await withTransaction(db, async () => {
     const { rows } = await db.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM listings WHERE owner_user_id = $1 AND data_source = 'user' AND status = 'draft'",
+      "SELECT count(*)::int AS n FROM listings WHERE owner_user_id = $1 AND data_source = 'user' AND status NOT IN ('archived', 'rejected')",
       [ownerId],
     );
     if (rows[0].n >= MAX_DRAFTS_PER_USER) throw new DraftLimitError();
@@ -161,7 +180,7 @@ export async function updateDraft(
 ): Promise<boolean> {
   return withTransaction(db, async () => {
     const { rows } = await db.query<{ property_id: string }>(
-      `SELECT l.property_id FROM listings l WHERE ${OWNED} AND l.id = $2 AND l.status = 'draft' FOR UPDATE`,
+      `SELECT l.property_id FROM listings l WHERE ${OWNED} AND l.id = $2 AND ${EDITABLE} FOR UPDATE`,
       [ownerId, listingId],
     );
     if (rows.length === 0) return false;
@@ -181,7 +200,8 @@ export async function updateDraft(
     await db.query(
       `UPDATE listings SET title = $3, transaction_type = $4, rent_period = $5, asking_amount = $6,
          asking_currency = $7, updated_at = now()
-       WHERE id = $2 AND owner_user_id = $1 AND data_source = 'user' AND status = 'draft'`,
+       WHERE id = $2 AND owner_user_id = $1 AND data_source = 'user'
+         AND status IN ('draft', 'changes_requested')`,
       [
         ownerId,
         listingId,
@@ -197,7 +217,7 @@ export async function updateDraft(
   });
 }
 
-/** The owner's drafts, most recently saved first (archived ones are left out). */
+/** The owner's listings in every status except archived, most recently changed first. */
 export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftSummary[]> {
   const { rows } = await db.query<{
     id: string;
@@ -211,6 +231,8 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
     updated_at: string;
     photo_count: number;
     cover_photo_id: string | null;
+    status: UserListingStatus;
+    reason: string | null;
   }>(
     `SELECT l.id, l.title, l.transaction_type, p.type AS property_type, c.name AS city, p.district,
             l.asking_amount::text AS amount, l.asking_currency AS currency,
@@ -218,9 +240,13 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
             (SELECT count(*)::int FROM listing_images i
               WHERE i.listing_id = l.id AND i.source_kind = 'upload') AS photo_count,
             (SELECT i.id FROM listing_images i
-              WHERE i.listing_id = l.id AND i.source_kind = 'upload' AND i.is_cover) AS cover_photo_id
+              WHERE i.listing_id = l.id AND i.source_kind = 'upload' AND i.is_cover) AS cover_photo_id,
+            l.status,
+            (SELECT e.reason FROM listing_status_events e
+              WHERE e.listing_id = l.id AND e.to_status = l.status
+              ORDER BY e.id DESC LIMIT 1) AS reason
      ${LISTING_FROM}
-     WHERE ${OWNED} AND l.status = 'draft'
+     WHERE ${OWNED} AND l.status <> 'archived'
      ORDER BY l.updated_at DESC, l.id
      LIMIT ${MAX_DRAFTS_PER_USER}`,
     [ownerId],
@@ -237,32 +263,71 @@ export async function listDrafts(db: SqlClient, ownerId: string): Promise<DraftS
     updatedAt: row.updated_at,
     photoCount: row.photo_count,
     coverPhotoId: row.cover_photo_id,
+    status: row.status,
+    reason: row.reason,
   }));
 }
 
-/** One of the owner's drafts, or null (missing, archived, or another user's). */
+/** One of the owner's editable listings (draft, changes requested), or null. */
 export async function getDraft(
   db: SqlClient,
   ownerId: string,
   listingId: string,
 ): Promise<ListingWithProperty | null> {
   const { rows } = await db.query<ListingRow>(
-    `SELECT ${LISTING_COLUMNS} ${LISTING_FROM} WHERE ${OWNED} AND l.id = $2 AND l.status = 'draft'`,
+    `SELECT ${LISTING_COLUMNS} ${LISTING_FROM} WHERE ${OWNED} AND l.id = $2 AND ${EDITABLE}`,
     [ownerId, listingId],
   );
   return (await hydrate(db, rows))[0] ?? null;
 }
 
-/** Archives (reversibly removes) one of the owner's drafts. False when it is not theirs. */
-export async function archiveDraft(
+/** One of the owner's listings in any status except archived (read-only views), or null. */
+export async function getOwnedListing(
   db: SqlClient,
   ownerId: string,
   listingId: string,
-): Promise<boolean> {
-  const { rows } = await db.query<{ id: string }>(
-    `UPDATE listings l SET status = 'archived', updated_at = now()
-     WHERE ${OWNED} AND l.id = $2 AND l.status = 'draft' RETURNING l.id`,
+): Promise<ListingWithProperty | null> {
+  const { rows } = await db.query<ListingRow>(
+    `SELECT ${LISTING_COLUMNS} ${LISTING_FROM} WHERE ${OWNED} AND l.id = $2 AND l.status <> 'archived'`,
     [ownerId, listingId],
   );
-  return rows.length === 1;
+  return (await hydrate(db, rows))[0] ?? null;
+}
+
+/** A listing waiting for review (any owner), or null; callers check the moderator role. */
+export async function getSubmittedListing(
+  db: SqlClient,
+  listingId: string,
+): Promise<ListingWithProperty | null> {
+  const { rows } = await db.query<ListingRow>(
+    `SELECT ${LISTING_COLUMNS} ${LISTING_FROM}
+     WHERE l.id = $1 AND l.data_source = 'user' AND l.status = 'submitted'`,
+    [listingId],
+  );
+  return (await hydrate(db, rows))[0] ?? null;
+}
+
+/**
+ * Archives one of the owner's listings (draft, changes requested, approved or rejected; a
+ * submitted one must be withdrawn first). False when it is not theirs or not archivable. The
+ * database records the change in listing_status_events.
+ */
+export async function archiveDraft(
+  db: SqlConnection,
+  ownerId: string,
+  listingId: string,
+): Promise<boolean> {
+  return withTransaction(db, async () => {
+    const { rows } = await db.query<{ id: string }>(
+      `SELECT l.id FROM listings l WHERE ${OWNED} AND l.id = $2
+         AND l.status IN ('draft', 'changes_requested', 'approved', 'rejected') FOR UPDATE`,
+      [ownerId, listingId],
+    );
+    if (rows.length === 0) return false;
+    await setActor(db, ownerId, "owner");
+    await db.query("UPDATE listings SET status = 'archived', updated_at = now() WHERE id = $1", [
+      listingId,
+    ]);
+    return true;
+  });
 }
